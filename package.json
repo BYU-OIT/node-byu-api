@@ -1,0 +1,39 @@
+{
+  "name": "node-byu-api",
+  "version": "0.0.1",
+  "description": "A framework for simplifying and standardizing the creation of web services for BYU.",
+  "main": "index.js",
+  "bin": {
+    "node-byu-api": "bin/node-byu-api.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BYU-OIT/node-byu-api.git"
+  },
+  "keywords": [
+    "byu",
+    "web service",
+    "web services",
+    "api"
+  ],
+  "author": "James Speirs <james_speirs@byu.edu>",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/BYU-OIT/node-byu-api/issues"
+  },
+  "homepage": "https://github.com/BYU-OIT/node-byu-api#readme",
+  "dependencies": {
+    "bluebird": "^3.0.5",
+    "body-parser": "^1.14.1",
+    "chalk": "^1.1.1",
+    "cli-format": "^1.1.4",
+    "cli-table2": "^0.1.9",
+    "cookie-parser": "^1.4.0",
+    "express": "^4.13.3",
+    "inquirer": "^0.11.0",
+    "request": "^2.65.0"
+  }
+}
