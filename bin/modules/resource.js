@@ -1,4 +1,4 @@
-var clc                 = require('./clc');
+var clc                 = require('../cli/clc');
 var file                = require('./file');
 var path                = require('path');
 
@@ -85,6 +85,7 @@ exports.options = {
     'src-limit': {
         type: String,
         description: 'The resource name to limit loaded resources to.',
+        help: 'The greatest benefit of this option is to reduce the initial startup time of the application.',
         group: 'resource'
     },
     'src-index': {

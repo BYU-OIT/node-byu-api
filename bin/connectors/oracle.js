@@ -5,23 +5,29 @@ var Promise             = require('bluebird');
 
 oracledb.outFormat = oracledb.OBJECT;
 
-connector.define('oracle', connect, disconnect, [
-    {
-        type: 'input',
-        name: 'username',
-        message: 'Username:'
+connector.define('oracle', connect, disconnect, {
+    username: {
+        type: String,
+        question_type: 'input',
+        message: 'Username:',
+        description: 'The user name to use to connect to the database.',
+        required: true
     },
-    {
-        type: 'password',
-        name: 'password',
-        message: 'Password:'
+    password: {
+        type: String,
+        question_type: 'password',
+        message: 'Password:',
+        description: 'The password to use to connect to the database.',
+        required: true
     },
-    {
-        type: 'input',
-        name: 'connection_string',
-        message: 'Connection String:'
+    connection_string: {
+        type: String,
+        question_type: 'input',
+        message: 'Connection String:',
+        description: 'The database connection string.',
+        required: true
     }
-]);
+});
 
 /*connector.define('oracle', connect, disconnect, {
     description: 'An oracle relational database connector.',

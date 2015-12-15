@@ -1,4 +1,4 @@
-var clc                 = require('./clc');
+var clc                 = require('../cli/clc');
 
 module.exports = requestHandler;
 

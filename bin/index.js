@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
-require('./modules/cli-connector.js');
-require('./modules/cli-db-connection.js');
-require('./modules/cli-request-handler.js');
-require('./modules/cli-server.js');
+require('./cli/cli-connection.js');
+require('./cli/cli-connector.js');
+require('./cli/cli-request-handler.js');
+require('./cli/cli-server.js');
 
-require('./modules/clc').evaluate();
+require('./cli/clc').evaluate();
 
 
 

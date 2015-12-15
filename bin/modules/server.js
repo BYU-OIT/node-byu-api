@@ -1,5 +1,5 @@
 var bodyParser          = require('body-parser');
-var clc                 = require('./clc');
+var clc                 = require('../cli/clc');
 var connector           = require('./connector');
 var cookieParser        = require('cookie-parser');
 var express             = require('express');

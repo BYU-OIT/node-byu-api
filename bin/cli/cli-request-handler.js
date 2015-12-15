@@ -1,7 +1,7 @@
 var clc             = require('./clc');
 var cliConnector    = require('./cli-connector');
-var requestHandler  = require('./request-handler');
-var resource        = require('./resource');
+var requestHandler  = require('../modules/request-handler');
+var resource        = require('../modules/resource');
 
 var methods = ['get', 'head', 'post', 'put', 'delete', 'trace', 'options', 'connect', 'path'];
 
@@ -68,6 +68,9 @@ cliRequestHandler.options = {
 clc.define('request', clc.exitOnErrorHandler(requestHandler), {
     description: 'Perform a REST request from the command line.',
     defaultOption: 'url',
+    synopsis: [
+        '[OPTIONS]... [URL]'
+    ],
     groups: {
         connector: 'Connector Options',
         request: 'Request Options',

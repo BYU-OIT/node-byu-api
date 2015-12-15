@@ -1,7 +1,7 @@
 var clc             = require('./clc');
 var cliConnector    = require('./cli-connector');
-var resource        = require('./resource');
-var server          = require('./server');
+var resource        = require('../modules/resource');
+var server          = require('../modules/server');
 
 module.exports = cliServer;
 
