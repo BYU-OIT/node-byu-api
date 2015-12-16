@@ -1,3 +1,7 @@
+"use strict";
+// This file provides a function that allows another function to use either a callback
+// paradigm or a Promise paradigm.
+
 var Promise             = require('bluebird');
 
 module.exports = promiseOption;

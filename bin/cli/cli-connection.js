@@ -1,6 +1,6 @@
 var clc             = require('./clc');
 var cliConnection   = require('./cli-connection-interactive');
-var dbConnection    = require('../modules/db-connection');
+var dbConnection    = require('../modules/connection-config');
 var NoStackError    = require('../modules/no-stack-error');
 
 var options = {

@@ -1,17 +1,21 @@
+"use strict";
+// This file does the work of gathering resources.
+
 var clc                 = require('../cli/clc');
 var file                = require('./file');
+var fs                  = require('fs');
 var path                = require('path');
 
-
-var resourceMap = {};
-
+module.exports = resource;
 
 /**
- * Load resources from the specified src directory.
- * @param {object} configuration
+ * Require resource and sub resource files from the directory specified.
+ * @param configuration
+ * @returns {Promise}
  */
-exports.load = function(configuration) {
-    var config = clc.options.normalize(exports.options, configuration, true);
+function resource(configuration) {
+    var config = clc.options.normalize(resource.options, configuration, true);
+    var src = path.resolve(process.cwd(), config.src);
 
     function resourceAllowed(resourceName) {
         var limit = config['src-limit'];
@@ -20,24 +24,25 @@ exports.load = function(configuration) {
     }
 
     //validate that the src directory is a directory
-    return file.stat(config.src)
+    return file.stat(src)
 
         //validate that the src directory is a directory and get a map of its contents
         .then(function(stat) {
             if (!stat.isDirectory()) {
-                throw new Error('Invalid src directory specified for resources: ' + config.src);
+                throw new Error('Invalid src directory specified for resources: ' + src);
             }
-            return file.readdirStats(config.src, true);
+            return file.readdirStats(src, true);
         })
 
         //populate the resource map
         .then(function(directoryMap) {
             var filePaths = Object.keys(directoryMap);
+            var resourceMap = {};
             filePaths.sort();
             filePaths.forEach(function(filePath) {
-                var index;
+                var defPath;
                 var indexPath;
-                var pathParts = path.relative(config.src, filePath).split(path.sep);
+                var pathParts = path.relative(src, filePath).split(path.sep);
                 var resource = pathParts[0];
                 var stat = directoryMap[filePath];
                 var subResource = pathParts[1];
@@ -47,10 +52,11 @@ exports.load = function(configuration) {
                     //resource directory
                     if (pathParts.length === 1 && resourceAllowed(resource)) {
                         indexPath = resource + path.sep + config['src-index'];
-                        index = filePaths.indexOf(indexPath);
-                        if (index !== -1) {
+                        defPath = resource + path.sep + config.def;
+                        if (filesExist(indexPath, defPath)) {
                             resourceMap[resource] = {
-                                index: require(path.resolve(config.src, indexPath)),
+                                def: fs.readFileSync(defPath, 'utf8'),
+                                module: require(path.resolve(src, indexPath)),
                                 subResources: {}
                             }
                         }
@@ -58,16 +64,56 @@ exports.load = function(configuration) {
                     //sub resource directory
                     } else if (pathParts.length === 2 && resourceMap.hasOwnProperty(resource)) {
                         indexPath = resource + path.sep + subResource + path.sep + config['src-index'];
-                        index = filePaths.indexOf(indexPath);
-                        if (index !== -1) resourceMap[resource][subResource] = require(path.resolve(config.src, indexPath));
+                        defPath = resource + path.sep + subResource + path.sep + config.def;
+                        if (filesExist(indexPath, defPath)) {
+                            resourceMap[resource][subResource] = {
+                                def: fs.readFileSync(defPath, 'utf8'),
+                                module: require(path.resolve(src, indexPath))
+                            };
+                        }
                     }
                 }
             });
             return resourceMap;
-        });
-};
+        })
 
-exports.options = {
+        //return the resource factory
+        .then(function(resourceMap) {
+            var factory = {};
+
+            /**
+             * Get a definition object for a resource or a sub resource.
+             * @param {string} resourceName
+             * @param {string} [subResourceName]
+             * @returns {object}
+             */
+            factory.definition = function(resourceName, subResourceName) {
+                if (!resourceMap.hasOwnProperty(resourceName)) return;
+                if (!subResourceName) return JSON.parse(resourceMap[resourceName].def);
+                if (resourceMap.subResources.hasOwnProperty(subResourceName)) {
+                    return JSON.parse(resourceMap.subResources[subResourceName].def);
+                }
+            };
+
+            /**
+             * Get the module for a resource or sub-resource.
+             * @param {string} resourceName
+             * @param {string} [subResourceName]
+             * @returns {*}
+             */
+            factory.get = function(resourceName, subResourceName) {
+                if (!resourceMap.hasOwnProperty(resourceName)) return;
+                if (!subResourceName) return resourceMap[resourceName].module;
+                if (resourceMap.subResources.hasOwnProperty(subResourceName)) {
+                    return resourceMap.subResources[subResourceName].module;
+                }
+            };
+
+            return factory;
+        });
+}
+
+resource.options = {
     def: {
         alias: 'f',
         type: String,
@@ -98,14 +144,13 @@ exports.options = {
     }
 };
 
-/**
- * Get the module for a loaded resource.
- * @param {string} resourceName
- * @param {string} [subResourceName]
- * @returns {*}
- */
-exports.resource = function(resourceName, subResourceName) {
-    if (!resourceMap.hasOwnProperty(resourceName)) return;
-    if (!subResourceName) return resourceMap[resourceName].index;
-    if (resourceMap.subResources.hasOwnProperty(subResourceName)) return resourceMap.subResources[subResourceName];
-};
+function filesExist(directoryMap, paths) {
+    var i;
+    var path;
+    for (i = 0; i < paths.length; i++) {
+        path = paths[i];
+        if (!directoryMap.hasOwnProperty(path)) return false;
+        if (!directoryMap[path].isFile()) return false;
+    }
+    return true;
+}

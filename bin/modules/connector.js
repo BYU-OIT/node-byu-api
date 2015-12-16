@@ -1,4 +1,6 @@
 "use strict";
+// This file is the bridge between connectors and the rest of the code.
+
 var file            = require('./file');
 var NoStackError    = require('./no-stack-error');
 var path            = require('path');

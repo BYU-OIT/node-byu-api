@@ -1,3 +1,5 @@
+"use strict";
+// This file has some file helper utilities.
 var fs                  = require('fs');
 var p                   = require('path');
 var Promise             = require('bluebird');

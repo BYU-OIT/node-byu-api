@@ -29,42 +29,6 @@ connector.define('oracle', connect, disconnect, {
     }
 });
 
-/*connector.define('oracle', connect, disconnect, {
-    description: 'An oracle relational database connector.',
-    examples: [
-        {
-            title: 'Example',
-            body: '{\n' +
-            '  "name":       "userX",\n' +
-            '  "password":   "1-secret",\n' +
-            '  "connection": "host=..."\n}'
-        }
-    ],
-    groups: {
-        property: 'Property Descriptions'
-    },
-    options: {
-        name: {
-            description: 'The user name to use to authenticate with.',
-            type: String,
-            required: true,
-            group: 'property'
-        },
-        password: {
-            description: 'The password to use to authenticate with.',
-            type: String,
-            required: true,
-            group: 'property'
-        },
-        connection: {
-            description: 'The oracle connection string.',
-            type: String,
-            required: true,
-            group: 'property'
-        }
-    }
-});*/
-
 function connect(configuration) {
     return new Promise(function(resolve, reject) {
         oracledb.getConnection(configuration, function(err, conn) {

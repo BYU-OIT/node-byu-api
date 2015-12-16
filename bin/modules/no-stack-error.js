@@ -1,3 +1,5 @@
+"use strict";
+// This file defines an error type that does not produce a stack trace.
 
 module.exports = NoStackError;
 

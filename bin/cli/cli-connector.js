@@ -5,7 +5,11 @@ var format          = require('cli-format');
 
 clc.define('connector', handler, {
     description: 'Get information about defined connectors.',
-    help: 'A connector takes a configuration and uses it to connect to a database. Each connector will ' +
+    help: 'If this stuff about connectors confuses you, just use the ' +
+        chalk.italic('connection') + ' command to get an interactive terminal application ' +
+        'that will help you define your connector configurations. If you must enter a connector ' +
+        'configuration through the command line then you\'ll have to understand this stuff.\n\n' +
+        'A connector takes a configuration and uses it to connect to a database. Each connector will ' +
         'connect to a specific database type (as defined by the connector itself). Each connector has a' +
         'specific configuration that it accepts. To see that configuration information, you can add' +
         'the name of the connector of interest after this command (or add it through the --name option).',
