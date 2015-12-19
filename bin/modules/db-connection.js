@@ -88,26 +88,3 @@ connection.options = {
         group: 'connection'
     }
 };
-
-
-function connectionManager(store) {
-    var connectors = {};
-    var factory = {};
-
-    //build connectors map
-    factory.connections = {};
-    Object.keys(store).forEach(function(name) {
-        var connectorName = store[name].connector;
-        var connectorItem = connector.get(connectorName);
-        if (!connectorItem) throw new NoStackError('Connector does not exist: ' + connectorName);
-        factory.connections[name] = {
-            connect: function() {
-
-            }
-        }
-    });
-
-
-
-    return factory;
-}

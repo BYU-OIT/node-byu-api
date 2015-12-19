@@ -25,7 +25,7 @@ exports.connect = function(name, options) {
  * @param {function} connect The function to call with configuration
  * data to create a connection.
  * @param {function} disconnect The function to call to disconnect.
- * @param {object[]} configuration An object map of command line args and questions, used by the inquirer
+ * @param {object} configuration An object map of command line args and questions, used by the inquirer
  * cli to manage connections and by the command-line-usage to output help.
  */
 exports.define = function(name, connect, disconnect, configuration) {
@@ -88,13 +88,18 @@ exports.list = function() {
  */
 exports.load = function() {
     var dirPath;
+    var root = path.resolve(__dirname, '../connectors');
+
     if (!loadPromise) {
         dirPath = path.resolve(__dirname, '../connectors');
         loadPromise = file.readdirStats(dirPath)
             .then(function(statMap) {
                 Object.keys(statMap).forEach(function(filePath) {
                     var stat = statMap[filePath];
-                    if (stat.isFile() && /\.js$/.test(filePath)) require(filePath);
+                    if (stat.isFile() && /\.js$/.test(filePath)) {
+                        console.log('Loading connector file: ' + path.relative(root, filePath));
+                        require(filePath);
+                    }
                 });
             });
     }

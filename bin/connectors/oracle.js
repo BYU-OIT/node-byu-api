@@ -1,15 +1,15 @@
 "use strict";
+var clc                 = require('../cli/clc');
 var connector           = require('../modules/connector');
 var oracledb 	        = {};//require('oracledb');
 var Promise             = require('bluebird');
+var promiseOption       = require('../modules/promise-option');
 
-oracledb.outFormat = oracledb.OBJECT;
-
-connector.define('oracle', connect, disconnect, {
-    username: {
+var oracleOptions = {
+    user: {
         type: String,
         question_type: 'input',
-        message: 'Username:',
+        message: 'User:',
         description: 'The user name to use to connect to the database.',
         required: true
     },
@@ -20,85 +20,118 @@ connector.define('oracle', connect, disconnect, {
         description: 'The password to use to connect to the database.',
         required: true
     },
-    connection_string: {
+    'connection-string': {
         type: String,
         question_type: 'input',
-        message: 'Connection String:',
+        message: 'Connection string:',
         description: 'The database connection string.',
         required: true
+    },
+    'auto-commit': {
+        type: Boolean,
+        question_type: 'confirm',
+        message: 'Auto commit:',
+        description: 'If set to true then transactions are automatically committed at the end of statement execution.',
+        defaultValue: false
+    },
+    'connection-class': {
+        type: String,
+        question_type: 'input',
+        message: 'Connection class:',
+        description: 'A logical name for connections, used to separate sessions.',
+        defaultValue: ''
+    },
+    'external-auth': {
+        type: Boolean,
+        question_type: 'confirm',
+        message: 'External authorization?',
+        description: 'Whether to use external authorization.',
+        defaultValue: false
+    },
+    'fetch-as-string': {
+        type: Array,
+        question_type: 'checkbox',
+        message: 'Fetch as string:',
+        description: 'Specify which data types to get as strings from the database.',
+        choices: ['Date', 'Number'],
+        defaultValue: []
+    },
+    'max-rows': {
+        type: Number,
+        question_type: 'input',
+        message: 'Maximum rows:',
+        description: 'The maximum number of rows to return from a query.',
+        help: 'If you expect a large or unknown number of results, you may want to look into the ResultSet option.',
+        defaultValue: 100
+    },
+    'out-format': {
+        type: String,
+        question_type: 'list',
+        message: 'Row format:',
+        description: 'The format of each row from a query.',
+        choices: ['Array', 'Object'],
+        defaultValue: 'Array'
+    },
+    'prefetch-rows': {
+        type: Number,
+        question_type: 'input',
+        message: 'Prefetch rows:',
+        description: 'The number rows to prefetch when using a ResultSet.',
+        defaultValue: 100
+    },
+    'statement-cache': {
+        type: Number,
+        question_type: 'input',
+        message: 'Statement cache:',
+        description: 'The number statements that are cached in the statement cache of each connection.',
+        defaultValue: 30
     }
-});
+};
 
-function connect(configuration) {
-    return new Promise(function(resolve, reject) {
-        oracledb.getConnection(configuration, function(err, conn) {
-            if (err) return reject(err);
-            var factory = {
-                break: promiseOption(oracledb, conn.break),
-                commit: promiseOption(oracledb, conn.commit),
-                execute: promiseOption(oracledb, conn.execute),
-                rollback: promiseOption(oracledb, conn.rollback)
-            };
-            factory.executeWithCommit = executeWithCommit(factory);
-            return resolve(factory);
+connector.define('oracle', connect, disconnect, oracleOptions);
+
+function connect(configuration, callback) {
+    var config = {};
+    oracledb.getConnection(config, function(err, conn) {
+        if (err) return callback(err, null);
+
+        var factory = {};
+
+        factory.break = promiseOption(oracledb, conn.break);
+        factory.commit = promiseOption(oracledb, conn.commit);
+        factory.execute = promiseOption(oracledb, conn.execute);
+        factory.rollback = promiseOption(oracledb, conn.rollback);
+
+        factory.executeWithCommit = promiseOption(oracledb, function() {
+            var args = [];
+            var callback;
+            var i;
+
+            for (i = 0; i < arguments.length; i++) args.push(arguments[i]);
+            callback = args.pop();
+            args.push(function(err, data) {
+                if (err) return callback(err, null);
+                conn.commit(function(err) {
+                    if (err) return callback(err, null);
+                    callback(null, data);
+                });
+            });
+
+            conn.execute.apply(oracledb, args)
         });
+
+        Object.defineProperty(factory, '__connection', {
+            enumerable: false,
+            configurable: false,
+            get: function() {
+                return conn;
+            }
+        });
+
+        callback(null, factory);
     });
 }
 
-function disconnect(connection) {
-    return Promise.promisify(connection.release);
-}
-
-
-
-
-function executeWithCommit(factory) {
-    return function () {
-        var args = Array.prototype.slice.call(arguments, 0);
-        var callback;
-
-        //callback paradigm
-        if (typeof args[args.length - 1] === 'function') {
-
-            //remove final callback from args
-            callback = args.pop();
-
-            //add intermediate callback to args that will commit
-            args.push(function (err, data) {
-                if (err) return callback(err, data);
-                factory.commit(callback);
-            });
-
-            //execute the query
-            factory.execute.apply(factory, args);
-
-        //promise paradigm
-        } else {
-            return factory.execute.apply(factory, args)
-                .then(function(data) {
-                    return factory.commit();
-                });
-        }
-    };
-}
-
-function promiseOption(scope, callback) {
-    return function() {
-        var args = Array.prototype.slice.call(arguments, 0);
-
-        //if using callback paradigm
-        if (typeof args[args.length - 1] === 'function') {
-            return callback.apply(scope, args);
-
-        //using the promise paradigm
-        } else {
-            return new Promise(function(resolve, reject) {
-                args.push(function(err, data) {
-                    if (err) return reject(err);
-                    return resolve(data);
-                });
-                return callback.apply(scope, args);
-            });
-        }
-    }
+function disconnect(conn, callback) {
+    conn.__connection.release(callback);
 }
