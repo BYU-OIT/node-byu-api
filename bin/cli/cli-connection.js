@@ -1,6 +1,6 @@
 var clc             = require('./clc');
 var cliConnection   = require('./cli-connection-interactive');
-var dbConnection    = require('../modules/connection-config');
+var connFile        = require('../modules/connection-file');
 var NoStackError    = require('../modules/no-stack-error');
 
 var options = {
@@ -47,6 +47,11 @@ var options = {
     }
 };
 
+
+//////////////////////////////////////
+//      DEFINE CLI COMMANDS         //
+//////////////////////////////////////
+
 clc.define('connection', interactiveTerminal, {
     description: 'Start an interactive session that allows you to manage connections.',
     defaultOption: 'store',
@@ -77,9 +82,12 @@ clc.define('connection-password', password, {
     options: optSelect('old-password', 'password', 'store')
 });
 
+
+
+
 function define(err, options) {
     if (err || options.help) return;
-    dbConnection(options.store, options.password)
+    connFile(options.store, options.password)
         .then(function(dbConn) {
             dbConn.set(options.name, options.connector, options['connector-settings']);
             return dbConn.save()
@@ -97,7 +105,7 @@ function define(err, options) {
 function interactiveTerminal(err, options) {
     var dbConn;
     if (err || options.help) return;
-    dbConnection(options.store, options.password)
+    connFile(options.store, options.password)
         .then(function(dbConn) {
             return cliConnection(dbConn);
         })
@@ -111,7 +119,7 @@ function interactiveTerminal(err, options) {
 
 function list(err, options) {
     if (err) return;
-    dbConnection(options.store, options.password)
+    connFile(options.store, options.password)
         .then(function(dbConn) {
             return dbConn.status();
         })
@@ -122,7 +130,7 @@ function list(err, options) {
 
 function password(err, options) {
     if (err || options.help) return;
-    dbConnection(options.store, options['old-password'])
+    connFile(options.store, options['old-password'])
         .then(function(dbConn) {
             dbConn.changePassword(options.password);
             return dbConn.save();
@@ -135,7 +143,7 @@ function password(err, options) {
 
 function remove(err, options) {
     if (err || options.help) return;
-    dbConnection(options.store, options.password)
+    connFile(options.store, options.password)
         .then(function(dbConn) {
             dbConn.remove(options.name);
             return dbConn.save();

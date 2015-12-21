@@ -128,6 +128,51 @@ function Connection(filePath, password) {
         });
 }
 
+Connection.options = {
+    /*'db-connection': {
+        alias: 'n',
+        type: Object,
+        description: 'A database connection configuration. This will overwrite any connection with the same ' +
+        'name that is found in an included db-config-file.',
+        help: 'The object must be formatted as follows. The config property is the configuration that will ' +
+        'be passed to the connector:\n' +
+        '{\n' +
+        '  name: "connection_name",\n' +
+        '  connector: "connector_name",\n' +
+        '  config: {}\n' +
+        '}',
+        group: 'connection',
+        multiple: true,
+        validate: function(value) {
+            return value.hasOwnProperty('name') &&
+                typeof value.name === 'string' &&
+                value.name.length > 0 &&
+
+                value.hasOwnProperty('connector') &&
+                typeof value.connector === 'string' &&
+                value.connector.length > 0 &&
+
+                value.hasOwnProperty('config') &&
+                typeof value.config === 'object' &&
+                value.config;
+        }
+    },*/
+    'connection-file': {
+        alias: 'd',
+        type: String,
+        description: 'The path to the database connection configuration file. If omitted then there will be no ' +
+        'automated database connection handling.',
+        group: 'connection'
+    },
+    'connection-pass': {
+        alias: 'e',
+        type: String,
+        description: 'If the database connection configuration file is encrypted then you can provide the ' +
+        'decrypt password with this argument.',
+        group: 'connection'
+    }
+};
+
 
 
 function decrypt(content, password) {

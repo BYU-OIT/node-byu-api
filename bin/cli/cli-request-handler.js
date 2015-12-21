@@ -2,7 +2,7 @@
 // This file defines the command line interface for requests.
 
 var clc             = require('./clc');
-var dbConnection    = require('../modules/db-connection');
+var connFile        = require('../modules/connection-file');
 var requestHandler  = require('../modules/request-handler');
 var resource        = require('../modules/resource');
 
@@ -17,7 +17,7 @@ clc.define('request', cliRequestHandler, {
         request: 'Request Options',
         resource: 'Resource Options'
     },
-    options: Object.assign({}, requestHandler.options, dbConnection.options, resource.options)
+    options: Object.assign({}, requestHandler.options, connFile.options, resource.options)
 });
 
 function cliRequestHandler(err, configuration) {

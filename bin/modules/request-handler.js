@@ -1,5 +1,5 @@
 var clc                 = require('../cli/clc');
-var dbConnection        = require('./db-connection');
+var connManager         = require('./connection-manager');
 var Promise             = require('bluebird');
 var resource            = require('./resource');
 

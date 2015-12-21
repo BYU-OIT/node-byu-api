@@ -5,25 +5,49 @@
 Usage Example:
 
 var customError = require('./custom-error');        //include the custom error module
-var MyError = customError('MyError');               //define a error group
-var InputError = MyError('input');                  //create an error code classification for the group
-throw new InputError('Bad input');                  //throw an error
-throw new InputError('Bad input', 5);               //throw an error with 5 lines in the stack trace
+var MyError = customError('MyError', {
+    terminated: 'term'
+};
+throw new MyError.terminated('Process has terminated');     //output error as - MyError Error ETERM: Process has terminated
+throw new MyError.terminated('Process has terminated', 5);  //throw an error with 5 lines in the stack trace
  */
 
 var defaultStackLimit = 10;
 var store = {};
 
-module.exports = function(name, stackLimit) {
+/**
+ * Generate a set of error types that fall under the specified name space.
+ * @param {string} name
+ * @param {object} [map]
+ * @returns {object}
+ */
+module.exports = function(name, map) {
+    var result = {};
     if (store.hasOwnProperty(name)) throw new Error('A custom error with this name already exists: ' + name);
-    store[name] = {};
-    return function(code) {
-        code = 'E' + code.toUpperCase();
-        if (!store[name].hasOwnProperty(code)) store[name][code] = getCustomError(name, code);
-        return store[name][code];
-    };
+    if (typeof map === 'object') {
+        Object.keys(map).forEach(function (key) {
+            result[key] = module.exports.add(name, map[key]);
+        });
+    }
+    return result;
 };
 
+/**
+ * Add another error type to the specified name space.
+ * @param {string} name
+ * @param {string} code
+ * @returns {Error}
+ */
+module.exports.add = function(name, code) {
+    if (!store.hasOwnProperty(name)) store[name] = {};
+    code = 'E' + code.toUpperCase();
+    if (!store[name].hasOwnProperty(code)) store[name][code] = getCustomError(name, code);
+    return store[name][code];
+};
+
+/**
+ * Get or set the default stack trace size.
+ */
 Object.defineProperty(module.exports, 'stackTraceLimit', {
     enumerable: true,
     configurable: false,

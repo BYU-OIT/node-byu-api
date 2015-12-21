@@ -1,28 +1,23 @@
 "use strict";
 // This file is the bridge between connectors and the rest of the code.
 
+var connManager     = require('./connection-manager');
+var customError     = require('./custom-error');
 var file            = require('./file');
 var NoStackError    = require('./no-stack-error');
 var path            = require('path');
 
+var ConnectorError = customError('Connector', {
+    exists: 'exists',
+    notExist: 'dnexist',
+    name: 'name',
+    connect: 'conn',
+    disconnect: 'dconn',
+    config: 'config'
+});
+
 var store = {};
 var loadPromise;
-
-/**
- * Make a database connection for a connector.
- * @param {string} name The connector name.
- * @param {object} options The connection options.
- * @returns {Promise}
- */
-exports.connect = function(name, options) {
-    if (!exports.exists(name)) return Promise.reject(new Error('Cannot connect to undefined connector: ' + name));
-    return new Promise(function(resolve, reject) {
-        store[name].connect(options, function(err, conn) {
-            if (err) return reject(err);
-            resolve(conn);
-        });
-    });
-};
 
 /**
  * Define a connector.
@@ -36,29 +31,18 @@ exports.connect = function(name, options) {
 exports.define = function(name, connect, disconnect, configuration) {
 
     //validate parameters
-    if (exports.exists(name)) throw new Error('A Connector with this name already exists: ' + name);
-    if (typeof name !== 'string') throw new Error('connector.define expects the first parameter to be a string. Received: ' + name);
-    if (typeof connect !== 'function') throw new Error('connector.define expects the second parameter to be a function. Received: ' + connect);
-    if (typeof disconnect !== 'function') throw new Error('connector.define expects the third parameter to be a function. Received: ' + disconnect);
-    if (typeof configuration !== 'object') throw new Error('connector.define expects the fourth parameter to be an object. Received: ' + configuration);
+    if (exports.exists(name)) throw new ConnectorError.exists('A Connector with this name already exists: ' + name);
+    if (typeof name !== 'string') throw new ConnectorError.name('connector.define expects the first parameter to be a string. Received: ' + name);
+    if (typeof connect !== 'function') throw new ConnectorError.connect('connector.define expects the second parameter to be a function. Received: ' + connect);
+    if (typeof disconnect !== 'function') throw new ConnectorError.disconnect('connector.define expects the third parameter to be a function. Received: ' + disconnect);
+    if (typeof configuration !== 'object') throw new ConnectorError.config('connector.define expects the fourth parameter to be an object. Received: ' + configuration);
 
     //store the connector
     store[name] = {
         connect: connect,
         disconnect: disconnect,
         configuration: configuration
-    }
-};
-
-/**
- * Disconnect a database connection for a connector.
- * @param {string} name The name of the connector to disconnect from.
- * @param {object} connection The database connection.
- * @returns {*}
- */
-exports.disconnect = function(name, connection) {
-    if (!exports.exists(name)) return Promise.reject(new Error('Cannot disconnect from undefined connector: ' + name));
-    return store[name].disconnect(connection);
+    };
 };
 
 /**
@@ -135,11 +119,19 @@ exports.questions = function(connector, configuration) {
     if (!item) return questions;
     if (!configuration) configuration = {};
 
-    Object.keys(item.configuration).forEach(function(key) {
-        var question = Object.assign({}, item.configuration[key]);
-        var defaultValue = question.defaultValue || configuration[key];
+    function addQuestion(map, key) {
+        var question = Object.assign({}, map[key]);
+        var defaultValue;
         var filter;
 
+        //get the default value if there is one
+        if (configuration.hasOwnProperty(key)) {
+            defaultValue = configuration[key];
+        } else if (question.hasOwnProperty('defaultValue')) {
+            defaultValue = question.defaultValue;
+        }
+
+        //set up a formatter based on type
         switch(question.type) {
             case Number:
                 filter = function(v) { return parseInt(v); };
@@ -148,9 +140,19 @@ exports.questions = function(connector, configuration) {
 
         question.name = key;
         question.type = question.question_type;
-        if (question.type !== 'password') question.default = defaultValue;
+        if (typeof defaultValue !== 'undefined' && question.type !== 'password') question.default = defaultValue;
 
         questions.push(question);
+    }
+
+    //get connector configuration options
+    Object.keys(item.configuration).forEach(function(key) {
+        addQuestion(item.configuration, key);
+    });
+
+    //get connection manager configuration options
+    Object.keys(connManager.options).forEach(function(key) {
+        addQuestion(connManager.options, key);
     });
 
     return questions;
@@ -180,14 +182,13 @@ exports.settings = function(connector, configuration) {
 
 /**
  * Test a configuration for a connector.
- * @param {string} connector
+ * @param {string} connectorName
  * @param {object} configuration
  * @returns {Promise}
  */
-exports.test = function(connector, configuration) {
-    return exports.connect(connector, configuration)
-        .then(function(connection) {
-            exports.disconnect(connector, connection);
-        })
-        .catch(NoStackError.throw);
+exports.test = function(connectorName, configuration) {
+    var manager;
+    if (!exports.exists(name)) return Promise.reject(new ConnectorError.notExist('Cannot connect to undefined connector: ' + name));
+    manager = connManager(store[name].connect, store[name].disconnect, configuration, {});
+    return manager.connect().then(manager.disconnect);
 };
