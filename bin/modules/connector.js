@@ -16,7 +16,12 @@ var loadPromise;
  */
 exports.connect = function(name, options) {
     if (!exports.exists(name)) return Promise.reject(new Error('Cannot connect to undefined connector: ' + name));
-    return store[name].connect(options);
+    return new Promise(function(resolve, reject) {
+        store[name].connect(options, function(err, conn) {
+            if (err) return reject(err);
+            resolve(conn);
+        });
+    });
 };
 
 /**
@@ -132,16 +137,24 @@ exports.questions = function(connector, configuration) {
 
     Object.keys(item.configuration).forEach(function(key) {
         var question = Object.assign({}, item.configuration[key]);
+        var defaultValue = question.defaultValue || configuration[key];
+        var filter;
+
+        switch(question.type) {
+            case Number:
+                filter = function(v) { return parseInt(v); };
+                break;
+        }
+
         question.name = key;
         question.type = question.question_type;
-        if (configuration.hasOwnProperty(key) && question.type !== 'password') {
-            question.default = configuration[key];
-        }
+        if (question.type !== 'password') question.default = defaultValue;
+
         questions.push(question);
     });
 
     return questions;
-}
+};
 
 /**
  * Get formatted settings for a connector configuration.
