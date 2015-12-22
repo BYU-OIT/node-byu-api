@@ -2,9 +2,14 @@
 // This file does the work of gathering resources.
 
 var clc                 = require('../cli/clc');
+var customError         = require('./custom-error');
 var file                = require('./file');
 var fs                  = require('fs');
 var path                = require('path');
+
+var ResourceErr = customError('Resource', {
+    notDirectory: 'NODIR'
+});
 
 module.exports = resource;
 
@@ -29,7 +34,7 @@ function resource(configuration) {
         //validate that the src directory is a directory and get a map of its contents
         .then(function(stat) {
             if (!stat.isDirectory()) {
-                throw new Error('Invalid src directory specified for resources: ' + src);
+                throw new ResourceErr.notDirectory('Invalid src directory specified for resources: ' + src);
             }
             return file.readdirStats(src, true);
         })
@@ -85,7 +90,7 @@ function resource(configuration) {
              * Get a definition object for a resource or a sub resource.
              * @param {string} resourceName
              * @param {string} [subResourceName]
-             * @returns {object}
+             * @returns {object, undefined}
              */
             factory.definition = function(resourceName, subResourceName) {
                 if (!resourceMap.hasOwnProperty(resourceName)) return;
@@ -115,7 +120,6 @@ function resource(configuration) {
 
 resource.options = {
     def: {
-        alias: 'f',
         type: String,
         description: 'The name of each resource definition file.',
         defaultValue: 'def.json',

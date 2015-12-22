@@ -6,31 +6,31 @@ var customError         = require('./custom-error');
 var promiseOption       = require('./promise-option');
 var timeoutQueue        = require('./timeout-queue');
 
-var DbConnErr = customError('DbConnectionManager', {
+var PoolErr = customError('ConnectionPool', {
     limit: 'limit',
     terminated: 'term',
     timeout: 'timeout'
 });
 
-module.exports = manager;
+module.exports = pool;
 
-function manager(connect, disconnect, connConfiguration, managerConfiguration) {
+function pool(connect, disconnect, connConfiguration, poolConfiguration) {
     var available;
     var factory = {};
     var growing = 0;
-    var managerConfig = clc.options.camelCase(clc.options.normalize(manager.options, managerConfiguration, true));
+    var poolConfig = clc.options.camelCase(clc.options.normalize(pool.options, poolConfiguration, true));
     var pending;
     var terminate;
     var unavailable = [];
 
     //manage available connections and idle timeout
-    available = timeoutQueue(managerConfig.poolTimeout ? managerConfig.poolTimeout * 1000 : -1, function(conn) {
+    available = timeoutQueue(poolConfig.poolTimeout ? poolConfig.poolTimeout * 1000 : -1, function(conn) {
         disconnect(conn, noop);
     });
 
     //manage pending requests and request timeout
-    pending = timeoutQueue(managerConfig.connectTimeout * 1000, function(callback) {
-        callback(new DbConnErr.timeout('Get database connection timed out.'), null);
+    pending = timeoutQueue(poolConfig.connectTimeout * 1000, function(callback) {
+        callback(new PoolErr.timeout('Get database connection timed out.'), null);
     });
 
     /**
@@ -46,27 +46,27 @@ function manager(connect, disconnect, connConfiguration, managerConfiguration) {
 
         //if terminated then throw an error
         if (terminate) {
-            callback(new DbConnErr.terminated('The database connection manager has been terminated.'), null);
+            callback(new PoolErr.terminated('The database connection pool has been terminated.'), null);
 
-        //if a connection is available then return it
+            //if a connection is available then return it
         } else if (available.length > 0) {
             conn = available.get();
             unavailable.push(conn);
             callback(null, conn);
 
-        //if this request will overflow the pool then throw an error
-        } else if (poolSize - growing + pending.length >= managerConfig.poolMax) {
-            callback(new DbConnErr.limit('Database connection pool exhausted.'), null);
+            //if this request will overflow the pool then throw an error
+        } else if (poolSize - growing + pending.length >= poolConfig.poolMax) {
+            callback(new PoolErr.limit('Database connection pool exhausted.'), null);
 
-        //if a connection is about to be available then add callback to pending
+            //if a connection is about to be available then add callback to pending
         } else {
             pending.add(callback);
 
             if (pending.length > growing) {
 
                 //determine the new pool size
-                size = poolSize + managerConfig.poolIncrement;
-                if (size > managerConfig.poolMax) size = managerConfig.poolMax;
+                size = poolSize + poolConfig.poolIncrement;
+                if (size > poolConfig.poolMax) size = poolConfig.poolMax;
 
                 //add to the growth difference
                 diff = size - poolSize;
@@ -130,7 +130,7 @@ function manager(connect, disconnect, connConfiguration, managerConfiguration) {
     });
 
     /**
-     * Terminate the connection manager so that it will no longer hand out connections.
+     * Terminate the connection pool so that it will no longer hand out connections.
      * Also close connections as they are released. Use hard to close connections in use.
      * @param {boolean} [hard=false] Use true to immediately close connections in use.
      * @params {function} [callback] A callback function to return results to. If omitted then a
@@ -152,7 +152,7 @@ function manager(connect, disconnect, connConfiguration, managerConfiguration) {
         if (!hard) {
             graceTimeoutId = setTimeout(function () {
                 while (conn = unavailable.shift()) disconnect(conn, terminate);
-            }, managerConfig.terminateGrace * 1000);
+            }, poolConfig.terminateGrace * 1000);
         }
 
         terminate = function(err) {
@@ -161,7 +161,7 @@ function manager(connect, disconnect, connConfiguration, managerConfiguration) {
             if (count === 0 && typeof callback === 'function') {
                 clearTimeout(graceTimeoutId);
                 callback(errors.length > 0 ?
-                    new DbConnErr.terminated('Some connections could not close: \n\t' + errors.join('\n\t')) :
+                    new PoolErr.terminated('Some connections could not close: \n\t' + errors.join('\n\t')) :
                     null
                 );
             }
@@ -180,7 +180,7 @@ function manager(connect, disconnect, connConfiguration, managerConfiguration) {
      * @readonly
      * @type {number}
      */
-    getter('available', () => managerConfig.poolMax - unavailable.length);
+    getter('available', () => poolConfig.poolMax - unavailable.length);
 
     /**
      * Get the number of connections that are immediately available.
@@ -206,7 +206,7 @@ function manager(connect, disconnect, connConfiguration, managerConfiguration) {
     return factory;
 }
 
-manager.options = {
+pool.options = {
     'connect-timeout': {
         type: Number,
         question_type: 'input',

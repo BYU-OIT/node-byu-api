@@ -34,6 +34,10 @@ function promiseOption(scope, callback) {
 
         //if using callback paradigm
         if (typeof lastArg === 'function') {
+            args[args.length - 1] = function(err, data) {
+                if (err) return lastArg(err, null);
+                lastArg(null, data);
+            };
             return callback.apply(scope, args);
 
         //using the promise paradigm

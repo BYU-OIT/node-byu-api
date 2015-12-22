@@ -12,6 +12,7 @@ throw new MyError.terminated('Process has terminated');     //output error as - 
 throw new MyError.terminated('Process has terminated', 5);  //throw an error with 5 lines in the stack trace
  */
 
+var CustomError;
 var defaultStackLimit = 10;
 var store = {};
 
@@ -23,26 +24,15 @@ var store = {};
  */
 module.exports = function(name, map) {
     var result = {};
-    if (store.hasOwnProperty(name)) throw new Error('A custom error with this name already exists: ' + name);
+    if (store.hasOwnProperty(name)) throw new CustomError.exists('A custom error with this name already exists: ' + name);
     if (typeof map === 'object') {
         Object.keys(map).forEach(function (key) {
-            result[key] = module.exports.add(name, map[key]);
+            var code = 'E' + map[key].toUpperCase();
+            result[key] = getCustomError(name, code);
         });
     }
-    return result;
-};
-
-/**
- * Add another error type to the specified name space.
- * @param {string} name
- * @param {string} code
- * @returns {Error}
- */
-module.exports.add = function(name, code) {
-    if (!store.hasOwnProperty(name)) store[name] = {};
-    code = 'E' + code.toUpperCase();
-    if (!store[name].hasOwnProperty(code)) store[name][code] = getCustomError(name, code);
-    return store[name][code];
+    store[name] = result;
+    return store[name];
 };
 
 /**
@@ -59,8 +49,13 @@ Object.defineProperty(module.exports, 'stackTraceLimit', {
     }
 });
 
+
+CustomError = module.exports('CustomError', { exists: 'exists' });
+
 function getCustomError(name, code) {
     function CustomError(message, stackLimit) {
+        if (!(this instanceof CustomError)) return new CustomError(message, stackLimit);
+
         var err;
         var limit = Error.stackTraceLimit;
         var stack;

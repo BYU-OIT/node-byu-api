@@ -1,5 +1,5 @@
 "use strict";
-var manager             = require('../bin/modules/db-connection-manager');
+var manager             = require('../bin/modules/connection-pool');
 var Promise             = require('bluebird');
 var test                = require('tape');
 
@@ -111,7 +111,7 @@ test('Manager connection availability and pooling', function(t) {
             return m.multiConnect(2);
         })
         .catch(function(e) {
-            t.equal(e.name, 'DbConnectionManager', 'error type');
+            t.equal(e.name, 'ConnectionPool', 'error type');
             t.equal(e.code, 'ELIMIT', 'ELIMIT code');
         })
         .then(function() {
@@ -121,7 +121,7 @@ test('Manager connection availability and pooling', function(t) {
             return m.connect();
         })
         .catch(function(e) {
-            t.equal(e.name, 'DbConnectionManager', 'error type');
+            t.equal(e.name, 'ConnectionPool', 'error type');
             t.equal(e.code, 'ETERM', 'ETERM code');
         });
 });
@@ -138,7 +138,7 @@ test('Manager connection timeout', function(t) {
             t.fail('should have timed out');
         })
         .catch(function(e) {
-            t.equal(e.name, 'DbConnectionManager', 'error type');
+            t.equal(e.name, 'ConnectionPool', 'error type');
             t.equal(e.code, 'ETIMEOUT', 'error code');
         })
         .then(function() {
