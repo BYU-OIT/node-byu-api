@@ -1,10 +1,12 @@
 var cli             = require('./cli');
+var cliConnection   = require('./cli-connection');
 var connector       = require('../modules/connector');
 var inquirer        = require('inquirer');
+var requireDir      = require('../modules/require-directory');
 
 /**
  * Set the terminal into interactive mode.
- * @param dbConn
+ * @param dbConn The connection file factory.
  * @returns {Promise}
  */
 module.exports = function(dbConn) {
@@ -25,9 +27,17 @@ module.exports = function(dbConn) {
                 }
             ])
             .then(function(answers) {
-                if (answers.password !== answers.password2) throw new Error('Passwords did not match.');
-                dbConn.changePassword(answers.password);
-                console.log('Password changed.');
+                if (answers.password !== answers.password2) {
+                    return cli.choices('Passwords did not match:', ['Re-enter', 'Abort'])
+                        .then(function(value) {
+                            if (value === 'Re-enter') return menu.changePassword();
+                            return menu.root();
+                        });
+                } else {
+                    dbConn.changePassword(answers.password);
+                    console.log('Password changed.');
+                    changes = true;
+                }
             });
     };
 
@@ -50,7 +60,7 @@ module.exports = function(dbConn) {
         var connectorName;
 
         function test(config) {
-            return dbConn.test(name, config)
+            return cliConnection.connectionTest(name, config)
                 .then(function() {
                     console.log('Connection successful');
                 })
@@ -69,7 +79,7 @@ module.exports = function(dbConn) {
 
         return cli.choices('Connector:', connector.list())
             .then(function(connectorName) {
-                return cli.prompt(connector.questions(connectorName, connectorConfig))
+                return cli.prompt(cliConnection.questions(connectorName, connectorConfig))
                     .then(function(config) {
                         dbConn.set(name, connectorName, config);
                         changes = true;
@@ -93,7 +103,7 @@ module.exports = function(dbConn) {
     };
 
     menu.list = function() {
-        return dbConn.status()
+        return cliConnection.connectionStatus(dbConn)
             .then(function(output) {
                 console.log(output);
             });
@@ -124,7 +134,7 @@ module.exports = function(dbConn) {
                 }
             })
             .catch(function(e) {
-                console.log(e.message);
+                console.log(e.stack);
                 return menu.root();
             });
     };
@@ -156,6 +166,6 @@ module.exports = function(dbConn) {
             });
     };
 
-    return connector.load()
+    return requireDir('connectors')
         .then(menu.root);
 };

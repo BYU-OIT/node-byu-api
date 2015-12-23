@@ -14,6 +14,7 @@ throw new MyError.terminated('Process has terminated', 5);  //throw an error wit
 
 var CustomError;
 var defaultStackLimit = 10;
+var fullStack = false;
 var store = {};
 
 /**
@@ -36,6 +37,20 @@ module.exports = function(name, map) {
 };
 
 /**
+ * If set to true, then stack size will not be shortened, regardless of input
+ */
+Object.defineProperty(module.exports, 'fullStack', {
+    enumerable: true,
+    configurable: false,
+    get: function() {
+        return fullStack;
+    },
+    set: function(value) {
+        fullStack = !!value;
+    }
+});
+
+/**
  * Get or set the default stack trace size.
  */
 Object.defineProperty(module.exports, 'stackTraceLimit', {
@@ -49,7 +64,7 @@ Object.defineProperty(module.exports, 'stackTraceLimit', {
     }
 });
 
-
+//define a custom error that is used by this file in case of duplicate error definition
 CustomError = module.exports('CustomError', { exists: 'exists' });
 
 function getCustomError(name, code) {
@@ -62,6 +77,7 @@ function getCustomError(name, code) {
         if (!message) message = '';
 
         if (!isValidLimit(stackLimit)) stackLimit = defaultStackLimit;
+        if (fullStack && stackLimit < limit) stackLimit = limit;
 
         //create an error that we can get the stack from
         Error.stackTraceLimit = stackLimit + 1;

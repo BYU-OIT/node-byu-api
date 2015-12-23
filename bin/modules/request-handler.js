@@ -1,7 +1,12 @@
+"use strict";
 var clc                 = require('../cli/clc');
-var connManager         = require('./connection-manager');
+var connFile            = require('./connection-file');
+var connRequestManager  = require('./connection-request');
+var log                 = require('./log');
 var Promise             = require('bluebird');
+var reqResponse         = require('./request-response');
 var resource            = require('./resource');
+var uniqueId            = require('./unique-id');
 
 var methods = ['get', 'head', 'post', 'put', 'delete', 'trace', 'options', 'connect', 'path'];
 
@@ -9,32 +14,63 @@ module.exports = requestHandler;
 
 function requestHandler(configuration) {
     var factory = {};
-    var config = clc.options.normalize(requestHandler.options, configuration, true);
     var promises = [];
 
-    promises.push(dbConnection(configuration).then(v => factory.dbConnManager = v));
-    promises.push(resource(configuration).then(v => factory.resource = v));
+    //configure the logger
+    log(configuration);
 
-    return Promise.all(promises).then(function() {
-        return function(req, res, next) {
-            var error;
+    return Promise
+        .all([
+            connFile(configuration),
+            resource(configuration)
+        ])
+        .then(function(results) {
+            var dbConfig = results[0];
+            var resources = results[1];
+            var dbConnManager = connRequestManager(dbConfig);
 
-            //check for and respond to pre-flight errors
-            error = preFlightError(params);
-            if (error) return res.status(error.status, error.message);
+            return function(req, res) {
+                var dbUser;
+                var error;
+                var id = uniqueId();
+                var params = parameters(req, resources);
+                var response;
 
-            try {
-                result = param.resource[param.method](
-                    factory.dbConnManager.connections,
-                    params,
-                    request(req),
-                    response(res, config, factory.dbConnManager)
-                );
-            } catch (e) {
-                factory.dbConnManager.destroy();
-            }
-        }
-    });
+                //check for and respond to pre-flight errors
+                error = preFlightError(params);
+                if (error) return res.status(error.status, error.message);
+
+                //get some objects to feed into the request handler
+                dbUser = dbConnManager(id);
+                response = reqResponse();
+
+                return Promise
+                    .resolve(params.resource[params.method](
+                        dbConnManager.connections,
+                        params,
+                        req,
+                        response.delegate
+                    ))
+                    .then(function(data) {
+                        var o;
+                        dbUser.done();
+                        if (typeof data === 'object') {
+                            response.core.contentType('application/json');
+                            data = JSON.parse(data);
+                        }
+                        o = response.get();
+                        res.status(o.status).send(data);
+
+                    })
+                    .catch(function(err) {
+                        var o;
+                        dbUser.done();
+                        response.core.status(500).contentType('application/json');
+                        o = response.get();
+                        res.status(o.status).send(err instanceof Error ? err.message : err);
+                    });
+            };
+        });
 }
 
 requestHandler.options = {
@@ -108,21 +144,21 @@ function isKvArgument(value) {
 /**
  * Extract from the URL and the query string all of the information that is needed to
  * execute the query.
+ * @param {object} request The request object.
  * @param {object} resource The resource factory.
- * @param {string} url
- * @param {object} query
  * @returns {object}
  */
-function parameters(resource, url, query) {
+function parameters(request, resource) {
     var ar;
     var def;
     var contexts;
     var is_meta = false;
     var list;
     var params;
+    var url;
 
     //strip slashes off the front and end of the URL
-    url = url.replace(/^\/+/, '').replace(/\/+$/, '');
+    url = request.url.replace(/^\/+/, '').replace(/\/+$/, '');
 
     //split the URL
     ar = url.split('/');
@@ -139,7 +175,7 @@ function parameters(resource, url, query) {
     params = {
         fieldset: void 0,
         meta: is_meta,
-        method: req.method.toLowerCase(),
+        method: request.method.toLowerCase(),
         resource: resource.get(ar[0]),
         resource_def: null,
         resource_id: ar[1] ? ar[1].split(',') : void 0,
@@ -236,55 +272,6 @@ function preFlightError(params) {
             message: 'Method not supported by resource: ' + params.resource_name
         };
     }
-}
-
-function response(res, config, dbConnManager) {
-    var factory = Object.assign({}, res);
-    var timeoutId;
-    var sent = false;
-
-    //wrap response functions that end the response with additional functionality
-    ['download', 'end', 'json', 'jsonp', 'redirect', 'send', 'sendFile', 'sendStatus'].forEach(function(name) {
-        var callback = res[name];
-        factory[name] = function() {
-            var args;
-            var i;
-            if (!sent) {
-                args = [];
-                for (i = 0; i < arguments.length; i++) {
-                    args.push(arguments[i]);
-                }
-                callback.apply(res, args);
-                clearTimeout(timeoutId);
-                dbConnManager.destroy();
-                sent = true;
-            }
-        }
-    });
-
-    /**
-     * Reset the timeout countdown clock.
-     * @param message
-     */
-    factory.resetTimeout = function() {
-        if (config.timeout >= 0) {
-            clearTimeout(timeoutId);
-            timeoutId = setTimeout(function () {
-                factory.sendStatus(408);
-            }, config.timeout);
-        }
-    };
-
-    //start the timeout timer
-    factory.resetTimeout();
-
-    return factory;
-}
-
-function request(req) {
-    var factory = Object.assign({}, req);
-
-    return factory;
 }
 
 function transformKvArgument(value) {

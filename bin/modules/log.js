@@ -1,62 +1,64 @@
 "use strict";
 // This file provides logging and profiling utilities.
 var clc                 = require('../cli/clc');
-var LogError            = require('./custom-error')('Log')('exists');
 var rollingFile         = require('./rolling-file');
 
 var isWindows = /^win/.test(process.platform);
-var logger;
+var logger = false;
 
 module.exports = function(configuration) {
-    if (logger) throw new LogError('Logger has already been created');
-    logger = log(configuration);
-    return logger;
-};
+    if (!logger) {
+        var config = clc.options.camelCase(clc.options.normalize(module.exports.options, configuration, true));
+        var file;
+        var origin = {};
 
-function log(configuration) {
-    var config = clc.options.camelCase(clc.options.normalize(log.options, configuration, true));
-    var file;
-    var origin = {};
+        origin.stdout = process.stdout.write;
+        origin.stderr = process.stderr.write;
 
-    origin.stdout = process.stdout.write;
-    origin.stderr = process.stderr.write;
+        if (config.logFile) file = rollingFile(config.logFile, config.logSize);
 
-    if (config.logFile) file = rollingFile(config.logFile, config.logSize);
+        ['stdout', 'stderr'].forEach(function(type) {
+            process[type].write = function(content) {
+                var item;
+                var source;
 
-    process.stdout.write = intercept('stdout');
-    process.stderr.write = intercept('stderr');
-
-    function intercept(type) {
-        return function(content) {
-            var item;
-            var source;
-
-            if (file) {
                 item = {
                     content: content,
                     pid: process.pid,
                     time: Date.now(),
                     type: type === 'stderr' ? 'error' : 'log'
                 };
+
                 if (config.logSource) {
                     source = get_source();
                     item.source = source.file;
                     item.line = source.line;
                 }
-                file.write(JSON.stringify(item));
+
+                //log to file
+                if (file) file.write(JSON.stringify(item));
+
+                //log to console
+                if (config.logConsole) origin[type].call(process[type], content);
+
             }
+        });
 
-            origin[type].call(process[type], content);
-        }
+        logger = true;
     }
+};
 
-}
-
-log.options = {
+module.exports.options = {
+    'log-console': {
+        type: Boolean,
+        description: 'Set to false to not log out to the console.',
+        defaultValue: true,
+        group: 'log'
+    },
     'log-file': {
         alias: 'l',
         type: String,
-        description: 'The path of where to save logs. If omitted then logs will be output to the console.',
+        description: 'The path of where to save logs.',
         group: 'log'
     },
     'log-size': {

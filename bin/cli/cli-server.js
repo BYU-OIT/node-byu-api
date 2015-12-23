@@ -16,7 +16,7 @@ clc.define('server', cliServer, {
         resource: 'Resource Options',
         server: 'Server Options'
     },
-    options: Object.assign({}, server.options, dbConnection.options, log.options, resource.options)
+    options: Object.assign({}, server.options, connFile.options, log.options, resource.options)
 });
 
 function cliServer(err, config) {

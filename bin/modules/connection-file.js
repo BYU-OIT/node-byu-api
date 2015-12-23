@@ -29,12 +29,12 @@ function connectionFile(configuration) {
     var factory = {};
     var filePath;
     var fileDoesNotExist = false;
+    var hasFilePath = config.hasOwnProperty('connectionFile');
     var password = '';
     var store = {};
 
     //get file path and password
     if (config.hasOwnProperty('connectionPass')) password = config.connectionPass;
-    if (!config.hasOwnProperty('connectionFile')) throw new ConnFileError.path('Required connection file path not specified.');
     filePath = config.connectionFile;
 
     /**
@@ -83,7 +83,9 @@ function connectionFile(configuration) {
      * @returns {Promise}
      */
     factory.save = function() {
-        var content = encrypt(store, password);
+        var content;
+        if (!hasFilePath) throw new ConnFileError.path('Required connection file path not specified.');
+        content = encrypt(store, password);
         return file.writeFile(filePath, content, 'utf8');
     };
 
@@ -101,18 +103,20 @@ function connectionFile(configuration) {
     };
 
     //attempt to load the file and decrypt it
-    return file.readFile(filePath, 'utf8')
-        .catch(function(e) {
-            if (e.code === 'ENOENT') {
-                fileDoesNotExist = true;
-                return null;
-            }
-            throw e;
-        })
-        .then(function(content) {
-            store = content ? decrypt(content, password) : {};
-            return factory;
-        });
+    return !hasFilePath ?
+        Promise.resolve(factory) :
+        file.readFile(filePath, 'utf8')
+            .catch(function(e) {
+                if (e.code === 'ENOENT') {
+                    fileDoesNotExist = true;
+                    return null;
+                }
+                throw e;
+            })
+            .then(function(content) {
+                store = content ? decrypt(content, password) : {};
+                return factory;
+            });
 }
 
 connectionFile.options = {

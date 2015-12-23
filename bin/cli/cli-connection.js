@@ -1,7 +1,13 @@
+var chalk           = require('chalk');
 var clc             = require('./clc');
 var cliConnection   = require('./cli-connection-interactive');
+var cliError        = require('./cli-error');
+var connector       = require('../modules/connector.js');
+var format          = require('cli-format');
 var connFile        = require('../modules/connection-file');
-var NoStackError    = require('../modules/no-stack-error');
+var pool            = require('../modules/connection-pool');
+var requireDir      = require('../modules/require-directory');
+var Table           = require('cli-table2');
 
 var options = {
     connector: {
@@ -47,6 +53,152 @@ var options = {
     }
 };
 
+exports.connectionStatus = function(dbConn) {
+    var headings;
+    var table;
+    var settingsWidth;
+    var widths;
+
+    headings = [
+        chalk.white.bold('Name'),
+        chalk.white.bold('Type'),
+        chalk.white.bold('OK'),
+        chalk.white.bold('Settings')
+    ];
+
+    widths = [16, 16, 7, null];
+
+    settingsWidth = widths.reduce(function(prev, curr) {
+        return prev - (curr || 0) - 1;
+    }, format.config.config.availableWidth - 3);
+
+    table = new Table({
+        head: headings,
+        colWidths: widths
+    });
+
+    return exports.loadConnectors()
+        .then(function() {
+            var list;
+            var promises = [];
+
+            //get a list of defined connections
+            list = dbConn.list()
+                .map(function(name) {
+                    var item = dbConn.get(name);
+                    return {
+                        name: name,
+                        connector: item.connector,
+                        config: item.config
+                    };
+                });
+
+            //if there are no connections then output result and exit
+            if (list.length === 0) {
+                console.log(format.wrap(chalk.italic('There are no defined connections.')) + '\n');
+                return;
+            }
+
+            //test each connection
+            list.forEach(function(item, index) {
+                var promise = exports.connectionTest(item.connector, item.config)
+                    .then(function() {
+                        list[index].connected = chalk.green('\u2714 Yes');
+                    })
+                    .catch(function() {
+                        list[index].connected = chalk.red('\u2718 NO');
+                    });
+                promises.push(promise);
+            });
+
+            return Promise.all(promises)
+                .then(function() {
+                    list.forEach(function(item) {
+                        table.push([
+                            format.wrap(item.name, { width: widths[0] - 3 }),
+                            format.wrap(item.connector, { width: widths[1] - 3 }),
+                            format.wrap(item.connected, { width: widths[2] - 3 }),
+                            format.wrap(JSON.stringify(connectorSettings(item.connector, item.config) || {}, null, 2), { width: settingsWidth, hardBreak: '' })
+                        ]);
+                    });
+                    return table.toString();
+                });
+        });
+};
+
+/**
+ * Test a configuration for a connector.
+ * @param {string} connectorName
+ * @param {object} configuration
+ * @returns {Promise} that resolves if the connection and disconnection is successful, otherwise it rejects the promise.
+ */
+exports.connectionTest = function(connectorName, configuration) {
+    var item = connector.get(connectorName);
+    var manager;
+
+    if (!item) return Promise.reject(new cliError.connector('Cannot connect to undefined connector: ' + connectorName, 0));
+    manager = pool(item.connect, item.disconnect, configuration, {});
+    return manager.connect().then(manager.disconnect);
+};
+
+/**
+ * Get an inquirer questions the connector's configuration. Optionally
+ * include a configuration object that has already set values (default values)
+ * for one or more of the questions.
+ * @param {string} connectorName
+ * @param {object} [configuration]
+ * @returns {object[]}
+ */
+exports.questions = function(connectorName, configuration) {
+    var item = connector.get(connectorName);
+    var questions = [];
+
+    if (!item) return questions;
+    if (!configuration) configuration = {};
+
+    function addQuestion(map, key) {
+        var question = Object.assign({}, map[key]);
+        var defaultValue;
+        var filter;
+
+        //get the default value if there is one
+        if (configuration.hasOwnProperty(key)) {
+            defaultValue = configuration[key];
+        } else if (question.hasOwnProperty('defaultValue')) {
+            defaultValue = question.defaultValue;
+        }
+
+        //set up a formatter based on type
+        switch(question.type) {
+            case Number:
+                filter = function(v) { return parseInt(v); };
+                break;
+        }
+
+        question.name = key;
+        question.type = question.question_type;
+        if (typeof defaultValue !== 'undefined' && question.type !== 'password') question.default = defaultValue;
+
+        questions.push(question);
+    }
+
+    //get connector configuration options
+    Object.keys(item.configuration).forEach(function(key) {
+        addQuestion(item.configuration, key);
+    });
+
+    //get connection manager configuration options
+    Object.keys(pool.options).forEach(function(key) {
+        addQuestion(pool.options, key);
+    });
+
+    return questions;
+};
+
+exports.loadConnectors = function() {
+    return requireDir('connectors');
+};
+
 
 //////////////////////////////////////
 //      DEFINE CLI COMMANDS         //
@@ -83,11 +235,36 @@ clc.define('connection-password', password, {
 });
 
 
+function catcher(e) {
+    console.log(e.message);
+}
 
+function configFromOptions(options) {
+    var config = {};
+    if (options.hasOwnProperty('store')) config['connection-file'] = options.store;
+    if (options.hasOwnProperty('password')) config['connection-pass'] = options.password;
+    return config;
+}
+
+function connectorSettings(connectorName, configuration) {
+    var item = connector.get(connectorName);
+    var questions;
+    var result = {};
+    if (!item) return void 0;
+
+    questions = exports.questions(connectorName, configuration);
+    questions.forEach(function(question) {
+        if (configuration.hasOwnProperty(question.name)) {
+            result[question.name] = question.type === 'password' ? '**********' : configuration[question.name];
+        }
+    });
+
+    return result;
+}
 
 function define(err, options) {
     if (err || options.help) return;
-    connFile(options.store, options.password)
+    connFile(configFromOptions(options))
         .then(function(dbConn) {
             dbConn.set(options.name, options.connector, options['connector-settings']);
             return dbConn.save()
@@ -99,13 +276,21 @@ function define(err, options) {
                     console.log('Connection configuration connected to the database.');
                 });
         })
-        .catch(NoStackError.catch);
+        .catch(catcher);
 }
 
 function interactiveTerminal(err, options) {
-    var dbConn;
     if (err || options.help) return;
-    connFile(options.store, options.password)
+    console.log(configFromOptions(options));
+    connFile(configFromOptions(options))
+        .catch(function(e) {
+            if (e.name === 'ConnectionFile') {
+                console.error(e.message);
+                process.exit(1);
+            } else {
+                throw e;
+            }
+        })
         .then(function(dbConn) {
             return cliConnection(dbConn);
         })
@@ -119,87 +304,18 @@ function interactiveTerminal(err, options) {
 
 function list(err, options) {
     if (err) return;
-    connFile(options.store, options.password)
-        .then(function(dbConn) {
-            var headings;
-            var table;
-            var settingsWidth;
-            var widths;
-
-            headings = [
-                chalk.white.bold('Name'),
-                chalk.white.bold('Type'),
-                chalk.white.bold('OK'),
-                chalk.white.bold('Settings')
-            ];
-
-            widths = [16, 16, 7, null];
-
-            settingsWidth = widths.reduce(function(prev, curr) {
-                return prev - (curr || 0) - 1;
-            }, format.config.config.availableWidth - 3);
-
-            table = new Table({
-                head: headings,
-                colWidths: widths
-            });
-
-            return connector.load()
-                .then(function() {
-                    var list;
-                    var promises = [];
-
-                    //get a list of defined connections
-                    list = dbConn.list()
-                        .map(function(name) {
-                            var item = dbConn.get(name);
-                            return {
-                                name: name,
-                                connector: item.connector,
-                                config: item.config
-                            };
-                        });
-
-                    //if there are no connections then output result and exit
-                    if (list.length === 0) {
-                        console.log(format.wrap(chalk.italic('There are no defined connections.')) + '\n');
-                        return;
-                    }
-
-                    //test each connection
-                    list.forEach(function(item, index) {
-                        var promise = connector.test(item.connector, item.config)
-                            .then(function() {
-                                list[index].connected = chalk.green('\u2714 Yes');
-                            })
-                            .catch(function() {
-                                list[index].connected = chalk.red('\u2718 NO');
-                            });
-                        promises.push(promise);
-                    });
-
-                    return Promise.all(promises)
-                        .then(function() {
-                            list.forEach(function(item) {
-                                table.push([
-                                    format.wrap(item.name, { width: widths[0] - 3 }),
-                                    format.wrap(item.connector, { width: widths[1] - 3 }),
-                                    format.wrap(item.connected, { width: widths[2] - 3 }),
-                                    format.wrap(JSON.stringify(connector.settings(item.connector, item.config) || {}, null, 2), { width: settingsWidth, hardBreak: '' })
-                                ]);
-                            });
-                            return table.toString();
-                        });
-                });
-        })
-        .then(function(status) {
-            console.log(status);
-        });
+    return connFile(configFromOptions(options))
+        .then(exports.connectionStatus);
 }
 
 function password(err, options) {
+    var config = {};
     if (err || options.help) return;
-    connFile(options.store, options['old-password'])
+
+    if (options.hasOwnProperty('store')) config['connection-file'] = options.store;
+    if (options.hasOwnProperty('old-password')) config['connection-password'] = options['old-password'];
+
+    connFile(config)
         .then(function(dbConn) {
             dbConn.changePassword(options.password);
             return dbConn.save();
@@ -207,12 +323,12 @@ function password(err, options) {
         .then(function() {
             console.log('Password changed.');
         })
-        .catch(NoStackError.catch);
+        .catch(catcher);
 }
 
 function remove(err, options) {
     if (err || options.help) return;
-    connFile(options.store, options.password)
+    connFile(configFromOptions(options))
         .then(function(dbConn) {
             dbConn.remove(options.name);
             return dbConn.save();

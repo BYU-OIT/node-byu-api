@@ -74,19 +74,25 @@ function pool(connect, disconnect, connConfiguration, poolConfiguration) {
 
                 //add connections
                 for (i = 0; i < diff; i++) {
-                    connect(connConfiguration, function (err, conn) {
-                        growing--;
-                        if (terminate) {
-                            disconnect(conn, terminate);
+                    try {
+                        connect(connConfiguration, function (err, conn) {
+                            growing--;
+                            if (terminate) {
+                                disconnect(conn, terminate);
 
-                        } else if (pending.length > 0) {
-                            if (!err) unavailable.push(conn);
-                            pending.get()(err, conn);
+                            } else if (pending.length > 0) {
+                                if (!err) unavailable.push(conn);
+                                pending.get()(err, conn);
 
-                        } else if (!err) {
-                            available.add(conn);
+                            } else if (!err) {
+                                available.add(conn);
+                            }
+                        });
+                    } catch (err) {
+                        if (pending.length > 0) {
+                            pending.get()(err, null);
                         }
-                    });
+                    }
                 }
             }
         }
@@ -103,10 +109,15 @@ function pool(connect, disconnect, connConfiguration, poolConfiguration) {
             available.add(conn);
             callback(null);
         } else {
-            disconnect(conn, function(err) {
+            try {
+                disconnect(conn, function (err) {
+                    callback(err);
+                    terminate(err);
+                });
+            } catch (err) {
                 callback(err);
                 terminate(err);
-            });
+            }
         }
     });
 
