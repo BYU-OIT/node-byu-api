@@ -1,8 +1,8 @@
-var cli             = require('./cli');
+var cli             = require('./../../bin/util/cli');
 var cliConnection   = require('./cli-connection');
-var connector       = require('../modules/connector');
+var connector       = require('../../bin/connection/connector');
 var inquirer        = require('inquirer');
-var requireDir      = require('../modules/require-directory');
+var requireDir      = require('../../bin/util/require-directory');
 
 /**
  * Set the terminal into interactive mode.

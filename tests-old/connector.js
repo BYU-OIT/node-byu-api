@@ -1,5 +1,5 @@
 "use strict";
-var connector       = require('../bin/modules/connector');
+var connector       = require('./modules/connector');
 var test            = require('tape');
 
 test('valid definition', function(t) {

@@ -1,0 +1,29 @@
+"use strict";
+var is          = require('is');
+
+module.exports = is;
+
+is.arrayEach = function(test) {
+    return function(value) {
+        var i;
+        if (!is.array(value)) return false;
+        for (i = 0; i < value.length; i++) {
+            if (!test(value[i])) return false;
+        }
+        return true;
+    };
+};
+
+is.nonNegativeNumber = function(value) {
+    return is.number(value) && value >= 0;
+};
+
+is.oneOf = function(allowed) {
+    return function(value) {
+        return allowed.indexOf(value) !== -1;
+    }
+};
+
+is.positiveNumber = function(value) {
+    return is.number(value) && value > 0;
+};

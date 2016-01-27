@@ -2,7 +2,7 @@
 // This file defines the command line interface for requests.
 
 var clc             = require('./clc');
-var connFile        = require('../modules/connection-file');
+var connFile        = require('../../bin/connection/configuration-file');
 var log             = require('../modules/log');
 var requestHandler  = require('../modules/request-handler');
 var resource        = require('../modules/resource');
@@ -29,6 +29,8 @@ function cliRequestHandler(err, configuration) {
         .then(function(request) {
             var config;
             var query;
+            var res;
+            var store = {};
             var urlParts;
 
             //get query string off URL
@@ -50,10 +52,23 @@ function cliRequestHandler(err, configuration) {
             config.query = Object.assign(query, buildMapFromKvArguments(configuration.query));
             config.url = urlParts[0];
 
-            return request(config);
+            //build a response object
+            res = {
+                send: function(data) {
+                    console.log('Status Code: ' + store.status);
+                    console.log(data);
+                    return res;
+                },
+                status: function(code) {
+                    store.status = code;
+                    return res;
+                }
+            };
+
+            return request(config, res);
         })
         .then(function(result) {
-            console.log(result);
+            //console.log(result);
         });
 }
 

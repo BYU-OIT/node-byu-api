@@ -1,3 +1,4 @@
+"use strict";
 var inquirer            = require('inquirer');
 var Promise             = require('bluebird');
 
@@ -5,7 +6,6 @@ var Promise             = require('bluebird');
 /**
  * Provide an inquirer prompt that also joins the config and answers.
  * @param {object} questions
- * @param {function} handler
  */
 exports.prompt = function(questions) {
     return new Promise(function(resolve, reject) {

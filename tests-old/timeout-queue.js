@@ -1,5 +1,5 @@
 "use strict";
-var timeoutQueue    = require('../bin/modules/timeout-queue');
+var timeoutQueue    = require('./modules/timeout-queue');
 var test            = require('tape');
 
 test('has timeout', function(t) {

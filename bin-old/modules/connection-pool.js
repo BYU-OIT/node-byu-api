@@ -4,7 +4,7 @@
 var clc                 = require('../cli/clc');
 var customError         = require('./custom-error');
 var promiseOption       = require('./promise-option');
-var timeoutQueue        = require('./timeout-queue');
+var timeoutQueue        = require('./../../bin/util/timeout-queue');
 
 var PoolErr = customError('ConnectionPool', {
     limit: 'limit',

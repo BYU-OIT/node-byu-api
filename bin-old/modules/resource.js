@@ -3,7 +3,7 @@
 
 var clc                 = require('../cli/clc');
 var customError         = require('./custom-error');
-var file                = require('./file');
+var file                = require('./../../bin/util/file');
 var fs                  = require('fs');
 var path                = require('path');
 
@@ -56,25 +56,35 @@ function resource(configuration) {
 
                     //resource directory
                     if (pathParts.length === 1 && resourceAllowed(resource)) {
-                        indexPath = resource + path.sep + config['src-index'];
-                        defPath = resource + path.sep + config.def;
-                        if (filesExist(indexPath, defPath)) {
-                            resourceMap[resource] = {
-                                def: fs.readFileSync(defPath, 'utf8'),
-                                module: require(path.resolve(src, indexPath)),
-                                subResources: {}
+                        indexPath = src + path.sep + resource + path.sep + config['src-index'];
+                        defPath = src + path.sep + resource + path.sep + config.def;
+                        if (filesExist(directoryMap, [indexPath, defPath])) {
+                            try {
+                                resourceMap[resource] = {
+                                    def: fs.readFileSync(defPath, 'utf8'),
+                                    module: require(indexPath),
+                                    subResources: {}
+                                }
+                            } catch (e) {
+                                delete resourceMap[resource];
+                                if (!config['src-error-ignore']) throw e;
                             }
                         }
 
                     //sub resource directory
                     } else if (pathParts.length === 2 && resourceMap.hasOwnProperty(resource)) {
-                        indexPath = resource + path.sep + subResource + path.sep + config['src-index'];
-                        defPath = resource + path.sep + subResource + path.sep + config.def;
-                        if (filesExist(indexPath, defPath)) {
-                            resourceMap[resource][subResource] = {
-                                def: fs.readFileSync(defPath, 'utf8'),
-                                module: require(path.resolve(src, indexPath))
-                            };
+                        indexPath = src + path.sep + resource + path.sep + subResource + path.sep + config['src-index'];
+                        defPath = src + path.sep + resource + path.sep + subResource + path.sep + config.def;
+                        if (filesExist(directoryMap, [indexPath, defPath])) {
+                            try {
+                                resourceMap[resource].subResources[subResource] = {
+                                    def: fs.readFileSync(defPath, 'utf8'),
+                                    module: require(indexPath)
+                                };
+                            } catch (e) {
+                                delete resourceMap[resource].subResources[subResource];
+                                if (!config['src-error-ignore']) throw e;
+                            }
                         }
                     }
                 }
@@ -109,8 +119,8 @@ function resource(configuration) {
             factory.get = function(resourceName, subResourceName) {
                 if (!resourceMap.hasOwnProperty(resourceName)) return;
                 if (!subResourceName) return resourceMap[resourceName].module;
-                if (resourceMap.subResources.hasOwnProperty(subResourceName)) {
-                    return resourceMap.subResources[subResourceName].module;
+                if (resourceMap[resourceName].subResources.hasOwnProperty(subResourceName)) {
+                    return resourceMap[resourceName].subResources[subResourceName].module;
                 }
             };
 
@@ -130,6 +140,12 @@ resource.options = {
         type: String,
         description: 'The directory that has the code to handle the request.',
         defaultValue: './',
+        group: 'resource'
+    },
+    'src-error-ignore': {
+        type: Boolean,
+        description: 'If a syntax error is encountered on a resource then it will throw an error unless this option ' +
+        'is set. If this option is set then the resource will simply not be registered without throwing an error.',
         group: 'resource'
     },
     'src-limit': {

@@ -1,6 +1,6 @@
 "use strict";
 var clc                 = require('../cli/clc');
-var connFile            = require('./connection-file');
+var connFile            = require('./../../bin/connection/configuration-file');
 var connRequestManager  = require('./connection-request');
 var log                 = require('./log');
 var Promise             = require('bluebird');
@@ -29,6 +29,7 @@ function requestHandler(configuration) {
             var resources = results[1];
             var dbConnManager = connRequestManager(dbConfig);
 
+            //return the http request handler function
             return function(req, res) {
                 var dbUser;
                 var error;
@@ -38,7 +39,7 @@ function requestHandler(configuration) {
 
                 //check for and respond to pre-flight errors
                 error = preFlightError(params);
-                if (error) return res.status(error.status, error.message);
+                if (error) return res.status(error.status).send(error.message);
 
                 //get some objects to feed into the request handler
                 dbUser = dbConnManager(id);
@@ -46,7 +47,7 @@ function requestHandler(configuration) {
 
                 return Promise
                     .resolve(params.resource[params.method](
-                        dbConnManager.connections,
+                        dbUser.connectionMap(),
                         params,
                         req,
                         response.delegate

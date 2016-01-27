@@ -1,5 +1,5 @@
 "use strict";
-var customError     = require('../bin/modules/custom-error');
+var customError     = require('./modules/custom-error');
 var test            = require('tape');
 
 test('stack trace limit', function(t) {

@@ -2,11 +2,11 @@ var chalk           = require('chalk');
 var clc             = require('./clc');
 var cliConnection   = require('./cli-connection-interactive');
 var cliError        = require('./cli-error');
-var connector       = require('../modules/connector.js');
+var connector       = require('connector.js');
 var format          = require('cli-format');
-var connFile        = require('../modules/connection-file');
+var connFile        = require('connection-file');
 var pool            = require('../modules/connection-pool');
-var requireDir      = require('../modules/require-directory');
+var requireDir      = require('../../bin/util/require-directory');
 var Table           = require('cli-table2');
 
 var options = {

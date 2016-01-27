@@ -107,3 +107,5 @@ function getCustomError(name, code) {
 function isValidLimit(value) {
     return typeof value === 'number' && !isNaN(value) && value >= 0;
 }
+
+throw new CustomError('meat and cheese');

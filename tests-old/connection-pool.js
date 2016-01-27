@@ -1,5 +1,5 @@
 "use strict";
-var manager             = require('../bin/modules/connection-pool');
+var manager             = require('./modules/connection-pool');
 var Promise             = require('bluebird');
 var test                = require('tape');
 

@@ -1,6 +1,7 @@
 "use strict";
 // The purpose of this file is to manage database connection requests and releases.
-var pool            = require('connection-pool');
+var connector       = require('./../../bin/connection/connector');
+var pool            = require('./connection-pool');
 
 var store = {};
 
@@ -11,8 +12,11 @@ module.exports = function(dbConfig) {
     // TODO: set up pooling for each connection from the database configuration
 
     //get a connection pool for each defined connection in the configuration
-    dbConfig.list.forEach(function(name) {
-        var item = dbConfig.get(name);
+    dbConfig.list().forEach(function(name) {
+        var config = dbConfig.get(name);
+        var conn = connector.get(config.connector);
+        var connectConfig = connector.normalizeConfiguration(config.connector, config.config);
+
         connectionMap[name] = pool(item.connect, item.disconnect, item.connectConfig, item.poolConfig);
     });
 
