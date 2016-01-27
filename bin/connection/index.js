@@ -2,17 +2,21 @@
 var chalk           = require('chalk');
 var cli             = require('../util/cli');
 var Command         = require('command-line-callback');
-var Configuration   = require('./configuration');
 var connFile        = require('./configuration-file');
 var Connector       = require('./connector');
 var format          = require('cli-format');
 var inquirer        = require('inquirer');
+var path            = require('path');
+var Pool            = require('./pool');
 var requireDir      = require('../util/require-directory');
 var Table           = require('cli-table2');
 
 Command.define('connection-file',
     function(config) {
-        return connFile(config).then(cfInterface);
+        return requireDir(path.resolve(__dirname, '../connectors'))
+            .then(function() {
+                return connFile(config).then(cfInterface);
+            });
     },
     {
         brief: 'Create or update a connection file.',
@@ -38,7 +42,6 @@ Command.define('connection-file',
 function cfInterface(dbConn) {
     var menu = {};
     var changes = false;
-    var store = Configuration(dbConn);
 
     menu.changePassword = function() {
         return cli
@@ -88,14 +91,15 @@ function cfInterface(dbConn) {
         function test(connector, config) {
             return connector.test(config)
                 .then(function(result) {
+                    var message;
                     if (result === true) {
                         console.log('Connection successful');
                     } else {
-                        var message = 'Could not connect: ' + result.message;
+                        message = 'Could not connect: ' + result.message;
                         return cli.choices(message, ['Re-enter', 'Retry', 'Ignore'])
                             .then(function(answer) {
                                 switch (answer.toLowerCase()) {
-                                    case 're-enter': return menu.edit(name, config);
+                                    case 're-enter': return connectorQuestions(connector, config);
                                     case 'retry': return test(connector, config);
                                     case 'ignore': return;
                                 }
@@ -104,16 +108,29 @@ function cfInterface(dbConn) {
                 });
         }
 
+        function connectorQuestions(connector, config) {
+            var questions = getQuestionsFromConfiguration(connector.schema.configuration, config);
+            return cli.prompt(questions)
+                .then(function(answers) {
+                    return test(connector, answers)
+                        .then(function() {
+                            return answers;
+                        });
+                });
+        }
+
         return cli.choices('Connector:', Connector.list())
             .then(function(connectorName) {
                 var connector = Connector.get(connectorName);
-                var questions = getQuestionsFromConfiguration(connector.configuration, connectorConfig);
-                return cli.prompt(questions)
+                return connectorQuestions(connector, connectorConfig)
                     .then(function(config) {
-                        dbConn.set(name, connectorName, config);
-                        changes = true;
-                        return test(connector, config);
-                    });
+                        var questions = getQuestionsFromConfiguration(Pool.options.configuration, connectorConfig);
+                        return cli.prompt(questions)
+                            .then(function(answers) {
+                                dbConn.set(name, connectorName, config, answers);
+                                changes = true;
+                            });
+                    })
             });
     };
 
@@ -243,12 +260,15 @@ function connectionStatus(dbConn) {
 
     //test each connection
     list.forEach(function(item, index) {
-        var promise = exports.connectionTest(item.connector, item.config)
-            .then(function() {
-                list[index].connected = chalk.green('\u2714 Yes');
-            })
-            .catch(function() {
-                list[index].connected = chalk.red('\u2718 NO');
+        working here - where are the pool settings? They exist in the file
+
+        console.log(item);
+        var connector =  Connector.get(item.connector.name);
+        var promise = connector.test(item.connector.config)
+            .then(function(result) {
+                list[index].connected = result === true ?
+                    chalk.green('\u2714 Yes') :
+                    chalk.red('\u2718 NO');
             });
         promises.push(promise);
     });
@@ -256,11 +276,13 @@ function connectionStatus(dbConn) {
     return Promise.all(promises)
         .then(function() {
             list.forEach(function(item) {
+                var settings = Object.assign({}, item.connector.config, item.pool);
+                console.log('pool', item.pool);
                 table.push([
                     format.wrap(item.name, { width: widths[0] - 3 }),
-                    format.wrap(item.connector, { width: widths[1] - 3 }),
+                    format.wrap(item.connector.name, { width: widths[1] - 3 }),
                     format.wrap(item.connected, { width: widths[2] - 3 }),
-                    format.wrap(JSON.stringify(connectorSettings(item.connector, item.config) || {}, null, 2), { width: settingsWidth, hardBreak: '' })
+                    format.wrap(JSON.stringify(settings, null, 2), { width: settingsWidth, hardBreak: '' })
                 ]);
             });
             return table.toString();
@@ -271,12 +293,12 @@ function getQuestionsFromConfiguration(config, prevValues) {
     return Object.keys(config)
         .map(function(key) {
             var o = Object.assign({ name: key }, config[key]);
-            if (o.hasOwnProperty('defaultValue')) {
-                o.default = o.defaultValue;
-                delete o.defaultValue;
-            }
-            if (prevValues.hasOwnProperty(key)) {
-                o.default = prevValues[key];
+            if (o.type !== 'password') {
+                if (o.hasOwnProperty('defaultValue')) {
+                    o.default = o.defaultValue;
+                    delete o.defaultValue;
+                }
+                if (prevValues && prevValues.hasOwnProperty(key)) o.default = prevValues[key];
             }
             return o;
         });
