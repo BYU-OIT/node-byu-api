@@ -57,7 +57,9 @@ exports.define = function(name, disconnect, configuration, connect) {
         }
     };
 
+    item.configuration = configuration;
     item.disconnect = disconnect;
+    item.schema = schema;
 
     /**
      * Test a configuration against the connector.
@@ -77,17 +79,6 @@ exports.define = function(name, disconnect, configuration, connect) {
                 return result;
             });
     };
-
-    // store questions array (for inquirer)
-    item.questions = [];
-    Object.keys(configuration).forEach(function(key) {
-        var question = Object.assign({ name: key }, configuration[key]);
-        if (question.hasOwnProperty('transform')) {
-            question.filter = question.transform;
-            delete question.transform;
-        }
-        item.questions.push(question);
-    });
 };
 
 /**

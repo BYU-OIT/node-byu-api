@@ -1,6 +1,6 @@
 "use strict";
-
 var configFile      = require('../../bin/connection/configuration-file');
+var Connector       = require('../../bin/connection/connector');
 var expect          = require('chai').expect;
 var file            = require('../../bin/util/file.js');
 var Promise         = require('bluebird');
@@ -43,7 +43,8 @@ describe('connection/configuration-file', function() {
     describe('store', function() {
         var factory;
 
-        before(function() {
+        beforeEach(function() {
+            Connector.define('bar', 'disconnect', { foo: {} }, function() {});
             return configFile(config)
                 .then(function(f) {
                     factory = f;
@@ -51,20 +52,24 @@ describe('connection/configuration-file', function() {
         });
 
         afterEach(function() {
+            Connector.remove('bar');
             factory.list().forEach(function(name) {
                 factory.remove(name);
             });
         });
 
         it('get and set', function() {
-            var config = { connector: { name: 'bar', config: { foo: 'bar' } } };
-            factory.set('foo', config);
-            expect(factory.get('foo')).to.be.deep.equal(config);
+            var config = { connector: { name: 'bar', config: { foo: 'bar' } }, pool: {} };
+            var result;
+            factory.set('foo', 'bar', { foo: 'bar' }, {});
+            result = factory.get('foo');
+            result.pool = {};
+            expect(result).to.be.deep.equal(config);
         });
 
         it('list', function() {
-            factory.set('foo', {});
-            factory.set('baz', {});
+            factory.set('foo', 'bar', {}, {});
+            factory.set('baz', 'bar', {}, {});
             expect(factory.list()).to.be.deep.equal(['foo', 'baz']);
         });
 
@@ -73,7 +78,14 @@ describe('connection/configuration-file', function() {
     describe('save', function() {
         var setConfig = { connector: { name: 'bar', config: { foo: 'bar' } } };
 
-        afterEach(fs.clear);
+        beforeEach(function() {
+            Connector.define('bar', 'disconnect', { foo: {} }, function() {});
+        });
+
+        afterEach(function() {
+            Connector.remove('bar');
+            fs.clear();
+        });
 
         it('returns a promise', function() {
             return configFile(config)
@@ -84,10 +96,20 @@ describe('connection/configuration-file', function() {
 
         it('plain', function() {
             var factory;
+            var expected = {
+                foo: {
+                    connector: {
+                        name: 'bar',
+                        config: { foo: 'bar'}
+                    },
+                    pool: {}
+                }
+            };
+
             return configFile(config)
                 .then(function(f) {
                     factory = f;
-                    factory.set('foo', setConfig);
+                    factory.set('foo', 'bar', { foo: 'bar' }, {});
                     return factory.save();
                 })
                 .then(function() {
@@ -95,7 +117,8 @@ describe('connection/configuration-file', function() {
                 })
                 .then(function(content) {
                     var o = JSON.parse(content);
-                    expect(o).to.be.deep.equal({ foo: setConfig });
+                    o.foo.pool = {};
+                    expect(o).to.be.deep.equal(expected);
                 });
         });
 
@@ -104,7 +127,7 @@ describe('connection/configuration-file', function() {
             return configFile({ file: '/config', password: 'pass' })
                 .then(function(f) {
                     factory = f;
-                    factory.set('foo', setConfig);
+                    factory.set('foo', 'bar', {}, {});
                     return factory.save();
                 })
                 .then(function() {

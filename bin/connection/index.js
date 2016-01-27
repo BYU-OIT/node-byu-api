@@ -1,15 +1,18 @@
 "use strict";
+var chalk           = require('chalk');
 var cli             = require('../util/cli');
 var Command         = require('command-line-callback');
+var Configuration   = require('./configuration');
 var connFile        = require('./configuration-file');
-var connector       = require('./connector');
+var Connector       = require('./connector');
+var format          = require('cli-format');
 var inquirer        = require('inquirer');
 var requireDir      = require('../util/require-directory');
+var Table           = require('cli-table2');
 
 Command.define('connection-file',
     function(config) {
-        connFile(config)
-            .then(cfInterface);
+        return connFile(config).then(cfInterface);
     },
     {
         brief: 'Create or update a connection file.',
@@ -35,6 +38,7 @@ Command.define('connection-file',
 function cfInterface(dbConn) {
     var menu = {};
     var changes = false;
+    var store = Configuration(dbConn);
 
     menu.changePassword = function() {
         return cli
@@ -74,39 +78,41 @@ function cfInterface(dbConn) {
             }])
             .then(function(answers) {
                 var item = dbConn.get(answers.name);
-                if (item) throw new Error('A connection configuration with that name already exists.');
+                if (item) throw Error('A connection configuration with that name already exists.');
                 return menu.edit(answers.name);
             });
     };
 
     menu.edit = function(name, connectorConfig) {
-        var connectorName;
 
-        function test(config) {
-            return cliConnection.connectionTest(name, config)
-                .then(function() {
-                    console.log('Connection successful');
-                })
-                .catch(function(e) {
-                    var message = 'Could not connect: ' + e.message;
-                    return cli.choices(message, ['Re-enter', 'Retry', 'Ignore'])
-                        .then(function(answer) {
-                            switch (answer.toLowerCase()) {
-                                case 're-enter': return menu.edit(name, config);
-                                case 'retry': return test(config);
-                                case 'ignore': return;
-                            }
-                        });
+        function test(connector, config) {
+            return connector.test(config)
+                .then(function(result) {
+                    if (result === true) {
+                        console.log('Connection successful');
+                    } else {
+                        var message = 'Could not connect: ' + result.message;
+                        return cli.choices(message, ['Re-enter', 'Retry', 'Ignore'])
+                            .then(function(answer) {
+                                switch (answer.toLowerCase()) {
+                                    case 're-enter': return menu.edit(name, config);
+                                    case 'retry': return test(connector, config);
+                                    case 'ignore': return;
+                                }
+                            });
+                    }
                 });
         }
 
-        return cli.choices('Connector:', connector.list())
+        return cli.choices('Connector:', Connector.list())
             .then(function(connectorName) {
-                return cli.prompt(cliConnection.questions(connectorName, connectorConfig))
+                var connector = Connector.get(connectorName);
+                var questions = getQuestionsFromConfiguration(connector.configuration, connectorConfig);
+                return cli.prompt(questions)
                     .then(function(config) {
                         dbConn.set(name, connectorName, config);
                         changes = true;
-                        return test(config);
+                        return test(connector, config);
                     });
             });
     };
@@ -126,7 +132,7 @@ function cfInterface(dbConn) {
     };
 
     menu.list = function() {
-        return cliConnection.connectionStatus(dbConn)
+        return connectionStatus(dbConn)
             .then(function(output) {
                 console.log(output);
             });
@@ -191,4 +197,87 @@ function cfInterface(dbConn) {
 
     return requireDir('connectors')
         .then(menu.root);
-};
+}
+
+function connectionStatus(dbConn) {
+    var list;
+    var headings;
+    var promises = [];
+    var table;
+    var settingsWidth;
+    var widths;
+
+    headings = [
+        chalk.white.bold('Name'),
+        chalk.white.bold('Type'),
+        chalk.white.bold('OK'),
+        chalk.white.bold('Settings')
+    ];
+
+    widths = [16, 16, 7, null];
+
+    settingsWidth = widths.reduce(function(prev, curr) {
+        return prev - (curr || 0) - 1;
+    }, format.config.config.availableWidth - 3);
+
+    table = new Table({
+        head: headings,
+        colWidths: widths
+    });
+
+    //get a list of defined connections
+    list = dbConn.list()
+        .map(function(name) {
+            var item = dbConn.get(name);
+            return {
+                name: name,
+                connector: item.connector,
+                config: item.config
+            };
+        });
+
+    //if there are no connections then output result and exit
+    if (list.length === 0) {
+        return Promise.resolve(format.wrap(chalk.italic('There are no defined connections.')) + '\n');
+    }
+
+    //test each connection
+    list.forEach(function(item, index) {
+        var promise = exports.connectionTest(item.connector, item.config)
+            .then(function() {
+                list[index].connected = chalk.green('\u2714 Yes');
+            })
+            .catch(function() {
+                list[index].connected = chalk.red('\u2718 NO');
+            });
+        promises.push(promise);
+    });
+
+    return Promise.all(promises)
+        .then(function() {
+            list.forEach(function(item) {
+                table.push([
+                    format.wrap(item.name, { width: widths[0] - 3 }),
+                    format.wrap(item.connector, { width: widths[1] - 3 }),
+                    format.wrap(item.connected, { width: widths[2] - 3 }),
+                    format.wrap(JSON.stringify(connectorSettings(item.connector, item.config) || {}, null, 2), { width: settingsWidth, hardBreak: '' })
+                ]);
+            });
+            return table.toString();
+        });
+}
+
+function getQuestionsFromConfiguration(config, prevValues) {
+    return Object.keys(config)
+        .map(function(key) {
+            var o = Object.assign({ name: key }, config[key]);
+            if (o.hasOwnProperty('defaultValue')) {
+                o.default = o.defaultValue;
+                delete o.defaultValue;
+            }
+            if (prevValues.hasOwnProperty(key)) {
+                o.default = prevValues[key];
+            }
+            return o;
+        });
+}

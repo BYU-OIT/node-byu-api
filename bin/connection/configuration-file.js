@@ -1,6 +1,6 @@
 "use strict";
 // This file has tools for managing the database connection configuration files.
-
+var Configuration   = require('./configuration');
 var CustomError     = require('custom-error-instance');
 var crypto          = require('crypto');
 var file            = require('./../util/file');
@@ -25,7 +25,13 @@ function configurationFile(configuration) {
     var factory = {};
     var filePath;
     var password = '';
-    var store = {};
+    var store = Configuration();
+
+    // define store getters and setters
+    factory.get = store.get;
+    factory.list = store.list;
+    factory.remove = store.remove;
+    factory.set = store.set;
 
     //get file path and password
     if (config.hasOwnProperty('password')) password = config.password;
@@ -40,47 +46,13 @@ function configurationFile(configuration) {
     };
 
     /**
-     * Get a defined database connection.
-     * @param {string} name
-     * @returns {object}
-     */
-    factory.get = function(name) {
-        return store.hasOwnProperty(name) ? store[name] : void 0;
-    };
-
-    /**
-     * Get a list of names for defined connections.
-     * @returns {string[]}
-     */
-    factory.list = function() {
-        return Object.keys(store);
-    };
-
-    /**
-     * Delete a defined connection from the store.
-     * @param {string} connectionName
-     */
-    factory.remove = function(connectionName) {
-        delete store[connectionName];
-    };
-
-    /**
      * Save the file.
      * @returns {Promise}
      */
     factory.save = function() {
         var content;
-        content = encrypt(store, password);
+        content = encrypt(store.get(), password);
         return file.writeFile(filePath, content, 'utf8');
-    };
-
-    /**
-     * Set a connection's configuration.
-     * @param {string} connectionName
-     * @param {object} configuration
-     */
-    factory.set = function(connectionName, configuration) {
-        store[connectionName] = configuration;
     };
 
     //attempt to load the file and decrypt it
@@ -90,7 +62,7 @@ function configurationFile(configuration) {
             throw e;
         })
         .then(function(content) {
-            store = content ? decrypt(content, password) : {};
+            store.init(content ? decrypt(content, password) : {});
             return factory;
         });
 }

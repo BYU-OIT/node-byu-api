@@ -28,7 +28,7 @@ function Pool(connectorName, connectorConfiguration, poolConfiguration) {
     available = timeoutQueue(poolConfig.poolTimeout * 1000, function(conn) {
         // if the pool can strink then shrink it, otherwise add the connection back to available list
         if (available.length + unavailable.length >= poolConfig.poolMin) {
-            conn[connector.disconnect]();
+            disconnect(conn);
         } else {
             available.add(conn);
         }
@@ -55,11 +55,7 @@ function Pool(connectorName, connectorConfiguration, poolConfiguration) {
         if (terminate) return Promise.reject(new Err.terminated());
 
         // if an idle connection is available then return it
-        if (available.length > 0) {
-            conn = available.get();
-            unavailable.push(conn);
-            return Promise.resolve(conn);
-        }
+        if (available.length > 0) return Promise.resolve(lease());
 
         // if this request will overflow the max pool size then throw an error
         if (poolSize - growing + pending.length >= poolConfig.poolMax) return Promise.reject(new Err.limit());
@@ -86,7 +82,7 @@ function Pool(connectorName, connectorConfiguration, poolConfiguration) {
                         growing--;
 
                         if (terminate) {
-                            conn[connector.disconnect]();       // TODO: track when terminate ready
+                            terminate.push(disconnect(conn));
 
                         } else {
                             available.add(conn);
@@ -108,46 +104,52 @@ function Pool(connectorName, connectorConfiguration, poolConfiguration) {
      * @param {boolean} [hard=false] Set to true to force connections to disconnect immediately.
      */
     factory.terminate = function(hard) {
-        var conn;
-        var disconnect = connector.disconnect;
-        var graceTimeoutId;
-        var errors = [];
+        return new Promise(function(resolve, reject) {
+            var conn;
+            var leaseObject;
 
-        function settle() {
-            var promises = terminate
-                .map(function(promise) {
-                    return promise.reflect();
-                })
-                .each(function(inspection) {
-                    if (inspection.isRejected()) errors.push(inspection.reason());
+            function settle() {
+                var promises = [];
+                var errors = [];
+                terminate.forEach(function(promise) {
+                    var p = promise
+                        .catch(function(e) {
+                            errors.push(e);
+                        });
+                    promises.push(p)
                 });
+                return Promise.all(promises)
+                    .then(function() {
+                        if (errors.length > 0) {
+                            reject(new Err('One or more connections could not disconnect:\n\t' + e.join('\n\t')));
+                        } else {
+                            resolve();
+                        }
+                    });
+            }
 
-            return Promise.all(promises);
-        }
+            // initialize terminate
+            terminate = [];
 
-        // initialize terminate
-        terminate = [];
+            // inform all pending of failure to connect
+            while (pending.length > 0) pending.get().reject(Err.terminated);
 
-        // inform all pending of failure to connect
-        while (pending.length > 0) pending.get().reject(Err.terminated);
+            // terminate available connections first
+            while (conn = available.get()) terminate.push(disconnect(conn));
 
-        // terminate available connections first
-        while (conn = available.get()) {
-            terminate.push(conn[disconnect]());
-        }
+            // if doing hard disconnects then disconnect them now
+            if (hard) {
+                while (leaseObject = unavailable.shift()) terminate.push(disconnectLease(leaseObject));
+                settle();
 
-        // if doing hard disconnects then disconnect them now
-        if (hard) {
-            while (conn = unavailable.shift()) terminate.push(conn[disconnect]());
-            return settle();
-        }
-
-        //set a timeout that will do hard disconnects
-        graceTimeoutId = setTimeout(function () {
-            while (conn = unavailable.shift()) terminate.push(conn[connector.disconnect]());
-
-        }, poolConfig.terminateGrace * 1000);
-        return settle();
+            //set a timeout that will do hard disconnects
+            } else {
+                setTimeout(function () {
+                    while (leaseObject = unavailable.shift()) terminate.push(disconnectLease(leaseObject));
+                    settle();
+                }, poolConfig.terminateGrace * 1000);
+            }
+        });
     };
 
     /**
@@ -182,6 +184,21 @@ function Pool(connectorName, connectorConfiguration, poolConfiguration) {
         });
     }
 
+    function disconnect(conn) {
+        try {
+            return Promise.resolve(conn[connector.disconnect]());
+        } catch (e) {
+            return Promise.reject(e);
+        }
+    }
+
+    function disconnectLease(leaseObj) {
+        leaseObj.revoke();
+        return leaseObj.returnPromise.then(function() {
+            return disconnect(leaseObj.conn);
+        });
+    }
+
     function lease() {
         var conn = available.get();
         var deferred = defer();
@@ -199,7 +216,11 @@ function Pool(connectorName, connectorConfiguration, poolConfiguration) {
         }
 
         // add promise to unavailable
-        unavailable.push(deferred.promise);
+        unavailable.push({
+            conn: conn,
+            returnPromise: deferred.promise,
+            revoke: revoke
+        });
 
         // create a copy of the object
         Object.keys(conn).forEach(function(key) {
@@ -247,7 +268,7 @@ function Pool(connectorName, connectorConfiguration, poolConfiguration) {
         var i;
         for (i = 0; i < poolConfig.poolMin; i++) {
             factory.connect().then(function(conn) {
-                conn[connector.disconnect]();
+                disconnect(conn);
             });
         }
     })();

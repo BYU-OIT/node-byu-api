@@ -1,5 +1,5 @@
 "use strict";
-var connector           = require('../modules/connector');
+var connector           = require('../connection/connector');
 var is                  = require('../util/is');
 var oracledb 	        = {};//require('oracledb');
 var Promise             = require('bluebird');
@@ -20,35 +20,35 @@ connector.define('oracle', 'release',
             validate: is.string,
             required: true
         },
-        'connection-string': {
+        'connectionString': {
             type: 'input',
             message: 'Connection string:',
             help: 'This value must be a string.',
             validate: is.string,
             required: true
         },
-        'auto-commit': {
+        'autoCommit': {
             type: 'confirm',
             message: 'Auto commit:',
             help: 'This value must be a boolean.',
             validate: is.boolean,
             defaultValue: false
         },
-        'connection-class': {
+        'connectionClass': {
             type: 'input',
             message: 'Connection class:',
             help: 'This value must be a string.',
             validate: is.string,
             defaultValue: ''
         },
-        'external-auth': {
+        'externalAuth': {
             type: 'confirm',
             message: 'External authorization?',
             help: 'This value must be a boolean.',
             validate: is.boolean,
             defaultValue: false
         },
-        'fetch-as-string': {
+        'fetchAsString': {
             type: 'checkbox',
             message: 'Fetch as string:',
             choices: ['Date', 'Number'],
@@ -56,7 +56,7 @@ connector.define('oracle', 'release',
             validate: is.arrayEach(is.string),
             defaultValue: []
         },
-        'max-rows': {
+        'maxRows': {
             type: 'input',
             message: 'Maximum rows:',
             filter: parseInt,
@@ -64,7 +64,7 @@ connector.define('oracle', 'release',
             validate: is.nonNegativeNumber,
             defaultValue: 100
         },
-        'out-format': {
+        'outFormat': {
             type: 'list',
             message: 'Row format:',
             choices: ['Array', 'Object'],
@@ -72,7 +72,7 @@ connector.define('oracle', 'release',
             validate: is.oneOf(['Array', 'Object']),
             defaultValue: 'Array'
         },
-        'prefetch-rows': {
+        'prefetchRows': {
             type: 'input',
             message: 'Prefetch rows:',
             filter: parseInt,
@@ -80,7 +80,7 @@ connector.define('oracle', 'release',
             validate: is.nonNegativeNumber,
             defaultValue: 100
         },
-        'statement-cache': {
+        'statementCache': {
             type: 'input',
             message: 'Statement cache:',
             filter: parseInt,

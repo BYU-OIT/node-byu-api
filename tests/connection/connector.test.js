@@ -199,19 +199,15 @@ function clear() {
 function defineConnector(name, promises) {
     var configuration = {
         user: {
-            question: {
-                type: 'input',
-                message: 'User:'
-            },
+            type: 'input',
+            message: 'User:',
             help: 'This value must be a string.',
             validate: is.string,
             required: true
         },
         password: {
-            question: {
-                type: 'input',
-                message: 'Prefix:'
-            },
+            type: 'input',
+            message: 'Password:',
             help: 'This value must be a string.',
             validate: is.string,
             defaultValue: 'pass'
