@@ -59,7 +59,7 @@ connector.define('oracle', 'release',
         'maxRows': {
             type: 'input',
             message: 'Maximum rows:',
-            filter: parseInt,
+            transform: parseInt,
             help: 'This value must be a non-negative number.',
             validate: is.nonNegativeNumber,
             defaultValue: 100
@@ -75,7 +75,7 @@ connector.define('oracle', 'release',
         'prefetchRows': {
             type: 'input',
             message: 'Prefetch rows:',
-            filter: parseInt,
+            transform: parseInt,
             help: 'This value must be a non-negative number.',
             validate: is.nonNegativeNumber,
             defaultValue: 100
@@ -83,7 +83,7 @@ connector.define('oracle', 'release',
         'statementCache': {
             type: 'input',
             message: 'Statement cache:',
-            filter: parseInt,
+            transform: parseInt,
             help: 'This value must be a non-negative number.',
             validate: is.nonNegativeNumber,
             defaultValue: 30
@@ -102,18 +102,6 @@ connector.define('oracle', 'release',
                     factory.execute = Promise.promisify(conn.execute, {context: oracledb});
                     factory.release = Promise.promisify(conn.release, {context: oracledb});
                     factory.rollback = Promise.promisify(conn.rollback, {context: oracledb});
-
-                    factory.executeWithCommit = function () {
-                        var results;
-                        return factory.execute.apply(oracledb, arguments)
-                            .then(function (data) {
-                                results = data;
-                                return factory.commit();
-                            })
-                            .then(function () {
-                                return results;
-                            });
-                    };
 
                     resolve(factory);
                 });
