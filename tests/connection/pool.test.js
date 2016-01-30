@@ -1,10 +1,11 @@
 "use strict";
+/*
 var connector       = require('../../bin/connection/connector');
 var expect          = require('chai').expect;
 var Pool            = require('../../bin/connection/pool');
 var Promise         = require('bluebird');
 
-describe('connection/pool', function() {
+describe('database/pool', function() {
 
     describe('factory', function() {
 
@@ -310,4 +311,4 @@ describe('connection/pool', function() {
         });
     });
 
-});
+});*/

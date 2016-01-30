@@ -14,7 +14,12 @@ is.arrayEach = function(test) {
     };
 };
 
+is.nonEmptyString = function(value) {
+    return is.string(value) && value;
+};
+
 is.nonNegativeNumber = function(value) {
+    value = parseInt(value);
     return is.number(value) && value >= 0;
 };
 
@@ -25,5 +30,6 @@ is.oneOf = function(allowed) {
 };
 
 is.positiveNumber = function(value) {
+    value = parseInt(value);
     return is.number(value) && value > 0;
 };

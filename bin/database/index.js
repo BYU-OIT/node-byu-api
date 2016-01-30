@@ -2,37 +2,67 @@
 var chalk           = require('chalk');
 var cli             = require('../util/cli');
 var Command         = require('command-line-callback');
-var connFile        = require('./configuration-file');
+var Configuration   = require('./configuration');
 var Connector       = require('./connector');
 var format          = require('cli-format');
 var inquirer        = require('inquirer');
-var path            = require('path');
-var Pool            = require('./pool');
-var requireDir      = require('../util/require-directory');
+var Manager         = require('./manager');
 var Table           = require('cli-table2');
 
-Command.define('connection-file',
-    function(config) {
-        return requireDir(path.resolve(__dirname, '../connectors'))
-            .then(function() {
-                return connFile(config).then(cfInterface);
+exports.options = {
+    file: {
+        type: String,
+        description: 'The path to the database file.',
+        hidden: true,
+        required: true,
+        group: 'database'
+    },
+    password: {
+        type: String,
+        description: 'The password to use to encrypt or decrypt the database file.',
+        group: 'database'
+    }
+};
+
+Command.define('database-file',
+    function(configuration) {
+        return loadConfigurationFile(configuration)
+            .catch(function(e) {
+                if (e instanceof Configuration.error.noPass) return authInterface(configuration);
+                throw e;
+            })
+            .then(cfInterface)
+            .catch(function(e) {
+                if (e instanceof Configuration.error.pass) console.error(e.message);
             });
     },
     {
         brief: 'Create or update a connection file.',
         defaultOption: 'file',
         synopsis: [
-            '[FILE]'
+            '[OPTIONS]... [FILE]'
         ],
-        options: {
-            file: {
-                type: String,
-                description: 'The path to the file to load.',
-                hidden: true,
-                required: true
-            }
-        }
+        options: exports.options
     });
+
+/**
+ * Set the terminal to interactive mode to ask for the password.
+ * @param dbConn
+ */
+function authInterface(config) {
+    return cli
+        .prompt([
+            {
+                type: 'password',
+                name: 'password',
+                message: 'File encrypted. Enter password:'
+            }
+        ])
+        .then(function(answers) {
+            config.password = answers.password;
+            return loadConfigurationFile(config)
+        });
+}
 
 /**
  * Set the terminal into interactive mode.
@@ -87,6 +117,7 @@ function cfInterface(dbConn) {
     };
 
     menu.edit = function(name, connectorConfig) {
+        changes = true;
 
         function test(connector, config) {
             return connector.test(config)
@@ -114,6 +145,7 @@ function cfInterface(dbConn) {
                 .then(function(answers) {
                     return test(connector, answers)
                         .then(function() {
+                            dbConn.set(name, connector.name, answers);
                             return answers;
                         });
                 });
@@ -122,15 +154,7 @@ function cfInterface(dbConn) {
         return cli.choices('Connector:', Connector.list())
             .then(function(connectorName) {
                 var connector = Connector.get(connectorName);
-                return connectorQuestions(connector, connectorConfig)
-                    .then(function(config) {
-                        var questions = getQuestionsFromConfiguration(Pool.options.configuration, connectorConfig);
-                        return cli.prompt(questions)
-                            .then(function(answers) {
-                                dbConn.set(name, connectorName, config, answers);
-                                changes = true;
-                            });
-                    })
+                return connectorQuestions(connector, connectorConfig);
             });
     };
 
@@ -140,7 +164,8 @@ function cfInterface(dbConn) {
                 .prompt([{
                     type: 'confirm',
                     name: 'confirm',
-                    message: 'Exit without saving?'
+                    message: 'Exit without saving?',
+                    default: false
                 }])
                 .then(function(answers) {
                     if (!answers.confirm) return menu.root();
@@ -212,8 +237,7 @@ function cfInterface(dbConn) {
             });
     };
 
-    return requireDir('connectors')
-        .then(menu.root);
+    return menu.root();
 }
 
 function connectionStatus(dbConn) {
@@ -260,11 +284,8 @@ function connectionStatus(dbConn) {
 
     //test each connection
     list.forEach(function(item, index) {
-        working here - where are the pool settings? They exist in the file
-
-        console.log(item);
-        var connector =  Connector.get(item.connector.name);
-        var promise = connector.test(item.connector.config)
+        var connector =  Connector.get(item.connector);
+        var promise = connector.test(item.config)
             .then(function(result) {
                 list[index].connected = result === true ?
                     chalk.green('\u2714 Yes') :
@@ -276,13 +297,23 @@ function connectionStatus(dbConn) {
     return Promise.all(promises)
         .then(function() {
             list.forEach(function(item) {
-                var settings = Object.assign({}, item.connector.config, item.pool);
-                console.log('pool', item.pool);
+                var connector = Connector.get(item.connector);
+                var settingsStr = [];
+
+                Object.keys(item.config).forEach(function(key) {
+                    var value = item.config[key];
+                    var isPassword = connector.schema.configuration[key].type === 'password';
+
+                    if (isPassword) value = '*******';
+                    if (typeof value === 'string') value = '"' + value + '"';
+                    settingsStr.push(key + ': ' + value);
+                });
+
                 table.push([
                     format.wrap(item.name, { width: widths[0] - 3 }),
-                    format.wrap(item.connector.name, { width: widths[1] - 3 }),
+                    format.wrap(item.connector, { width: widths[1] - 3 }),
                     format.wrap(item.connected, { width: widths[2] - 3 }),
-                    format.wrap(JSON.stringify(settings, null, 2), { width: settingsWidth, hardBreak: '' })
+                    format.wrap(settingsStr.join('\n'), { width: settingsWidth, hardBreak: '' })//JSON.stringify(settings, null, 2), { width: settingsWidth, hardBreak: '' })
                 ]);
             });
             return table.toString();
@@ -302,4 +333,8 @@ function getQuestionsFromConfiguration(config, prevValues) {
             }
             return o;
         });
+}
+
+function loadConfigurationFile(config) {
+    return Manager.loadConnectors().then(Configuration(config).load);
 }

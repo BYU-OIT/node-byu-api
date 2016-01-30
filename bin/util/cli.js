@@ -2,7 +2,6 @@
 var inquirer            = require('inquirer');
 var Promise             = require('bluebird');
 
-
 /**
  * Provide an inquirer prompt that also joins the config and answers.
  * @param {object} questions

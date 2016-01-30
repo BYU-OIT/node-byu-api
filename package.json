@@ -43,8 +43,10 @@
     "request": "^2.67.0"
   },
   "devDependencies": {
+    "chai-as-promised": "^5.2.0",
     "gulp": "^3.9.0",
     "gulp-tape": "0.0.7",
+    "mock-fs": "^3.6.0",
     "tape": "^4.2.2"
   }
 }

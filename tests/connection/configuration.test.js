@@ -1,52 +1,139 @@
 "use strict";
-var Configuration       = require('../../bin/connection/configuration');
-var Connector           = require('../../bin/connection/connector');
+var Configuration       = require('../../bin/database/configuration');
+var Connector           = require('../../bin/database/connector');
+var connectorUtil       = require('../../test-utils/database-connector');
 var expect              = require('chai').expect;
+var file                = require('../../bin/util/file');
 var is                  = require('../../bin/util/is');
 
-describe('connection/configuration', function() {
+describe('database/configuration', function() {
+    var fs = fakeFs();
+    var config = { file: '/config', password: '' };
 
-    describe('init', function() {
+    describe('factory', function() {
+        var config = Configuration({ file: '/config' });
+
+        it('requires file path', function() {
+            expect(function() { Configuration(); }).to.throw(Error);
+        });
+
+        it('has function: changePassword', function() {
+            expect(config.changePassword).to.be.a('function');
+        });
+
+        it('has function: get', function() {
+            expect(config.get).to.be.a('function');
+        });
+
+        it('has function: list', function() {
+            expect(config.list).to.be.a('function');
+        });
+
+        it('has function: load', function() {
+            expect(config.load).to.be.a('function');
+        });
+
+        it('has function: remove', function() {
+            expect(config.remove).to.be.a('function');
+        });
+
+        it('has function: save', function() {
+            expect(config.save).to.be.a('function');
+        });
+
+        it('has function: set', function() {
+            expect(config.set).to.be.a('function');
+        });
+
+    });
+
+    describe('load', function() {
 
         beforeEach(defineConnector);
-        afterEach(clearConnector);
+        afterEach(function() {
+            clearConnector();
+            fs.clear();
+        });
 
-        it('empty', function() {
-            expect(function() { Configuration().init(); }).to.throw(Configuration.error.init);
+        it('resolves to factory', function() {
+            var factory = Configuration(config);
+            return factory.load()
+                .then(function(f) {
+                    expect(f).to.be.equal(factory);
+                });
+        });
+
+        it('populates store', function() {
+            var factory = Configuration(config);
+            return file.writeFile('/config', '{ "foo": { "connector": "bar", "config": { "user": "", "password": "" } } }')
+                .then(function() {
+                    return Configuration(config).load()
+                })
+                .then(function(factory) {
+                    expect(factory.get('foo')).to.be.deep.equal({ connector: 'bar', config: { user: '', password: '' } });
+                });
+        });
+
+        it('validates', function() {
+            var factory = Configuration(config);
+            return file.writeFile('/config', '{ "foo": { "connector": "bar", "config": {} } }')
+                .then(function() {
+                    return Configuration(config).load()
+                })
+                .catch(function(e) {
+                    expect(e).to.be.instanceof(Error);
+                });
+        });
+
+    });
+
+    describe('save', function() {
+        beforeEach(function() {
+            var config = connectorUtil.configuration('bar', false);
+            config.options = { foo: {} };
+            Connector.define(config);
+        });
+
+        afterEach(function() {
+            Connector.remove('bar');
+            fs.clear();
+        });
+
+        it('returns a promise', function() {
+            expect(Configuration(config).save()).to.be.instanceof(Promise);
         });
 
         it('plain', function() {
-            expect(function() { Configuration().init({}); }).to.not.throw(Error);
+            var expected = {
+                foo: {
+                    connector: 'bar',
+                    config: { foo: 'bar'}
+                }
+            };
+
+            return Configuration(config)
+                .set('foo', 'bar', { foo: 'bar' })
+                .save()
+                .then(function() {
+                    return file.readFile('/config');
+                })
+                .then(function(content) {
+                    var o = JSON.parse(content);
+                    expect(o).to.be.deep.equal(expected);
+                });
         });
 
-        it('missing connector', function() {
-            var config = fullConfig();
-            delete config.foo.connector;
-            expect(function() { Configuration().init(config); }).to.throw(Configuration.error.init);
-        });
-
-        it('missing connector name', function() {
-            var config = fullConfig();
-            delete config.foo.connector.name;
-            expect(function() { Configuration().init(config); }).to.throw(Configuration.error.init);
-        });
-
-        it('missing connector config', function() {
-            var config = fullConfig();
-            delete config.foo.connector.config;
-            expect(function() { Configuration().init(config); }).to.throw(Error);
-        });
-
-        it('missing pool', function() {
-            var config = fullConfig();
-            delete config.foo.pool;
-            expect(function() { Configuration().init(config); }).to.throw(Configuration.error.init);
-        });
-
-        it('connector config error', function() {
-            var config = fullConfig();
-            config.foo.connector.name = null;
-            expect(function() { Configuration().init(config); }).to.throw(Error);
+        it('encrypted', function() {
+            var factory;
+            return Configuration({ file: '/config', password: 'pass' })
+                .set('foo', 'bar', {})
+                .save()
+                .then(function() {
+                    return file.readFile('/config');
+                })
+                .then(function(content) {
+                    expect(/^[0-9a-f]+$/i.test(content)).to.be.true;
+                });
         });
 
     });
@@ -55,7 +142,7 @@ describe('connection/configuration', function() {
         var config;
 
         beforeEach(function() {
-            config = Configuration();
+            config = Configuration({ file: '/config' });
             defineConnector();
         });
 
@@ -99,7 +186,113 @@ describe('connection/configuration', function() {
 
     });
 
+    describe('validateFormat', function() {
+
+        beforeEach(defineConnector);
+        afterEach(clearConnector);
+
+        it('valid format', function() {
+            var o = {
+                foo: {
+                    connector: 'bar',
+                    config: {user: 'Bob', password: ''}
+                }
+            };
+            expect(Configuration.validateFormat(o)).to.be.equal(true);
+        });
+
+        it('requires that the connector name be a string', function() {
+            var o = {
+                foo: {
+                    connector: 5,
+                    config: {user: 'Bob', password: ''}
+                }
+            };
+            expect(Configuration.validateFormat(o)).to.be.instanceof(Configuration.error.set);
+        });
+
+        it('requires that the connector be defined', function() {
+            var o = {
+                foo: {
+                    connector: 'baz',
+                    config: {user: 'Bob', password: ''}
+                }
+            };
+            expect(Configuration.validateFormat(o)).to.be.instanceof(Connector.error);
+        });
+
+        it('requires that the connector configuration be valid', function() {
+            var o = {
+                foo: {
+                    connector: 'bar',
+                    config: {}
+                }
+            };
+            expect(Configuration.validateFormat(o)).to.be.instanceof(Error);
+        });
+
+    });
+
 });
+
+function defineConnector() {
+    connectorUtil.define('bar', false, {
+        options: {
+            user: {
+                type: 'input',
+                message: 'User:',
+                help: 'This value must be a string.',
+                validate: is.string,
+                required: true
+            },
+            password: {
+                type: 'password',
+                message: 'Password:',
+                help: 'This value must be a string.',
+                validate: is.string
+            }
+        }
+    });
+}
+
+function clearConnector() {
+    Connector.remove('bar');
+}
+
+function fakeFs() {
+    var factory = {};
+    var originalRead = file.readFile;
+    var originalWrite = file.writeFile;
+    var store = {};
+
+    file.readFile = function(path, encoding) {
+        return new Promise(function(resolve, reject) {
+            var error;
+            if (store.hasOwnProperty(path)) return resolve(store[path]);
+            error = new Error();
+            error.code = 'ENOENT';
+            reject(error);
+        });
+    };
+
+    file.writeFile = function(path, content, encoding) {
+        return new Promise(function(resolve) {
+            store[path] = content;
+            resolve();
+        });
+    };
+
+    factory.clear = function() {
+        store = {};
+    };
+
+    factory.restore = function() {
+        file.readFile = originalRead;
+        file.writeFile = originalWrite;
+    };
+
+    return factory;
+}
 
 function fullConfig() {
     return {
@@ -114,32 +307,4 @@ function fullConfig() {
             pool: {}
         }
     }
-}
-
-function defineConnector() {
-    var configuration = {
-        user: {
-            type: 'input',
-            message: 'User:',
-            help: 'This value must be a string.',
-            validate: is.string,
-            required: true
-        },
-        password: {
-            type: 'input',
-            message: 'Password:',
-            help: 'This value must be a string.',
-            validate: is.string
-        }
-    };
-
-    Connector.define('bar', 'disconnect', configuration, function() {
-        var factory = {};
-        factory.disconnect = function() {};
-        return factory;
-    });
-}
-
-function clearConnector() {
-    Connector.remove('bar');
 }

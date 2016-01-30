@@ -1,242 +1,117 @@
 "use strict";
-var connector       = require('../../bin/connection/connector');
+var Connector       = require('../../bin/database/connector');
+var connectorUtil   = require('../../test-utils/database-connector');
 var expect          = require('chai').expect;
-var is              = require('../../bin/util/is');
-var Promise         = require('bluebird');
 var schemata        = require('object-schemata');
 
-describe('connection/connector', function() {
+describe('database/connector', function() {
 
     describe('#define', function() {
 
-        before(clear);
-        afterEach(clear);
+        before(connectorUtil.clear);
+        afterEach(connectorUtil.clear);
 
-        it('empty name', function() {
-            expect(function() {
-                connector.define('', '', {}, function() {});
-            }).to.throw(connector.error.create);
+        it('valid definition', function() {
+            expect(() => connectorUtil.define('a')).to.not.throw(Error);
         });
 
-        it('invalid name', function() {
-            expect(function() {
-                connector.define(5, '', {}, function() {});
-            }).to.throw(connector.error.create);
+        it('duplicate definition', function() {
+            connectorUtil.define('a');
+            expect(() => connectorUtil.define('a')).to.throw(Connector.error.exists);
         });
 
-        it('empty disconnect name', function() {
-            expect(function() {
-                connector.define('a', '', {}, function() {});
-            }).to.throw(connector.error.create);
+        it('missing required connect', function() {
+            var config = connectorUtil.configuration('a');
+            delete config.connect;
+            expect(() => Connector.define(config)).to.throw(schemata.error);
         });
 
-        it('invalid disconnect name', function() {
-            expect(function() {
-                connector.define('a', 5, {}, function() {});
-            }).to.throw(connector.error.create);
+        it('missing required disconnect', function() {
+            var config = connectorUtil.configuration('a');
+            delete config.disconnect;
+            expect(() => Connector.define(config)).to.throw(schemata.error);
         });
 
-        it('invalid configuration', function() {
-            expect(function() {
-                connector.define('a', 'x', null, function() {});
-            }).to.throw(connector.error.create);
+        it('missing required factor', function() {
+            var config = connectorUtil.configuration('a');
+            delete config.factory;
+            expect(() => Connector.define(config)).to.throw(schemata.error);
         });
 
-        it('invalid connect function', function() {
-            expect(function() {
-                connector.define('a', 'x', {}, {});
-            }).to.throw(connector.error.create);
+        it('missing required name', function() {
+            var config = connectorUtil.configuration('a');
+            delete config.name;
+            expect(() => Connector.define(config)).to.throw(schemata.error);
         });
 
-        it('valid', function() {
-            connector.define('a', 'x', {}, function() {});
-            expect(function() {
-                connector.get('a');
-            }).to.not.throw(Error);
+    });
+
+    describe('#exists', function() {
+
+        before(connectorUtil.clear);
+        afterEach(connectorUtil.clear);
+
+        it('finds', function() {
+            connectorUtil.define('a');
+            expect(Connector.exists('a')).to.be.true;
         });
 
-        it('duplicate', function() {
-            connector.define('a', 'x', {}, function() {});
-            expect(function() {
-                connector.define('a', 'x', {}, function() {});
-            }).to.throw(connector.error.exists);
-        })
+        it('doesn\'t find', function() {
+            expect(Connector.exists('a')).to.be.false;
+        });
 
     });
 
     describe('#get', function() {
 
-        before(clear);
-        afterEach(clear);
+        before(connectorUtil.clear);
+        afterEach(connectorUtil.clear);
 
         it('can get', function() {
-            defineConnector('foo');
-            expect(connector.get('foo')).to.be.an('object');
-            clear();
+            connectorUtil.define('a');
+            expect(Connector.get('a')).to.be.an('object');
         });
 
-        it('connect sync returns promise', function() {
-            defineConnector('foo', false);
-            var c = connector.get('foo');
-            var conn = c.connect({ user: '' });
-            expect(conn).to.be.instanceof(Promise);
+        it('can\'t find throws error', function() {
+            expect(() => Connector.get('a')).to.throw(Connector.error.undefined);
         });
 
-        it('connect sync missing required', function() {
-            defineConnector('foo', false);
-            var c = connector.get('foo');
-            return c.connect()
-                .then(function() {
-                    throw new Error('Should have failed');
-                })
-                .catch(function(e) {
-                    expect(e).to.be.instanceof(schemata.error.required);
-                });
+    });
+
+    describe('#list', function() {
+
+        before(function() {
+            connectorUtil.clear();
+            connectorUtil.define('a');
+            connectorUtil.define('b');
+            connectorUtil.define('c');
+        });
+        after(connectorUtil.clear);
+
+        it('returns array of strings', function() {
+            var result = Connector.list().sort();
+            expect(result).to.be.instanceof(Array);
+            expect(result[0]).to.be.equal('a');
+            expect(result[1]).to.be.equal('b');
+            expect(result[2]).to.be.equal('c');
         });
 
-        it('connect sync wrong password', function() {
-            defineConnector('foo', false);
-            var c = connector.get('foo');
-            return c.connect({ user: 'Bob', password: '' })
-                .then(function() {
-                    throw new Error('Should have failed');
-                })
-                .catch(function(e) {
-                    expect(e).to.be.instanceof(Error);
-                    expect(e.message).to.be.equal('Incorrect password');
-                });
+    });
+
+    describe('#remove', function() {
+
+        before(connectorUtil.clear);
+        afterEach(connectorUtil.clear);
+
+        it('removes existing', function() {
+            connectorUtil.define('a');
+            expect(() => Connector.remove('a')).to.not.throw(Error);
         });
 
-        it('connect sync ok', function() {
-            defineConnector('foo', false);
-            var c = connector.get('foo');
-            return c.connect({ user: 'Bob' })
-                .then(function(factory) {
-                    expect(factory).to.be.an('object');
-                });
+        it('throws error for non-existing', function() {
+            expect(() => Connector.remove('a')).to.throw(Connector.error.undefined);
         });
-
-        it('connect async returns promise', function() {
-            defineConnector('foo', false, false);
-            var c = connector.get('foo');
-            var conn = c.connect({ user: '' });
-            expect(conn).to.be.instanceof(Promise);
-        });
-
-        it('connect sync missing required', function() {
-            defineConnector('foo', true);
-            var c = connector.get('foo');
-            return c.connect()
-                .then(function() {
-                    throw new Error('Should have failed');
-                })
-                .catch(function(e) {
-                    expect(e).to.be.instanceof(schemata.error.required);
-                });
-        });
-
-        it('connect async wrong password', function() {
-            defineConnector('foo', true);
-            var c = connector.get('foo');
-            return c.connect({ user: 'Bob', password: '' })
-                .then(function() {
-                    throw new Error('Should have failed');
-                })
-                .catch(function(e) {
-                    expect(e).to.be.instanceof(Error);
-                    expect(e.message).to.be.equal('Incorrect password');
-                });
-        });
-
-        it('connect async ok', function() {
-            defineConnector('foo', true);
-            var c = connector.get('foo');
-            return c.connect({ user: 'Bob' })
-                .then(function(factory) {
-                    expect(factory).to.be.an('object');
-                });
-        });
-
-        it('test pass', function() {
-            defineConnector('foo', false);
-            var c = connector.get('foo');
-            return c.test({ user: 'Bob' })
-                .then(function(value) {
-                    expect(value).to.be.equal(true);
-                });
-        });
-
-        it('test fail user', function() {
-            defineConnector('foo', false);
-            var c = connector.get('foo');
-            return c.test()
-                .then(function(value) {
-                    expect(value).to.be.instanceof(Error);
-                });
-        });
-
-        it('test fail password', function() {
-            defineConnector('foo', false);
-            var c = connector.get('foo');
-            return c.test({ user: '', password: '' })
-                .then(function(value) {
-                    expect(value).to.be.instanceof(Error);
-                });
-        });
-
 
     });
 
 });
-
-function clear() {
-    connector.list().forEach(function(name) {
-        connector.remove(name);
-    });
-}
-
-
-function defineConnector(name, promises) {
-    var configuration = {
-        user: {
-            type: 'input',
-            message: 'User:',
-            help: 'This value must be a string.',
-            validate: is.string,
-            required: true
-        },
-        password: {
-            type: 'input',
-            message: 'Password:',
-            help: 'This value must be a string.',
-            validate: is.string,
-            defaultValue: 'pass'
-        }
-    };
-
-    connector.define(name, 'letGo', configuration, function(config) {
-        var disconnected = false;
-        var factory = {};
-        var err = new Error('Incorrect password');
-
-        factory.password = config.password;
-
-        factory.letGo = function() {
-            disconnected = true;
-        };
-
-        if (factory.password !== 'pass') {
-            if (promises) {
-                return Promise.reject(err);
-            } else {
-                throw err;
-            }
-        }
-
-        if (!promises) {
-            return factory;
-        } else {
-            return Promise.resolve(factory);
-        }
-    });
-}

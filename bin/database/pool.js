@@ -282,6 +282,7 @@ Pool.options = schemata({
         message: 'Connect timeout:',
         help: 'This value must be a non-negative number.',
         defaultValue: 30,
+        transform: parseInt,
         validate: is.nonNegativeNumber
     },
     poolIncrement: {
@@ -314,12 +315,14 @@ Pool.options = schemata({
         type: 'input',
         message: 'Pool timeout (in seconds):',      // The number of seconds before an idle connection will be closed
         defaultValue: 60,
+        transform: parseInt,
         validate: is.nonNegativeNumber
     },
     terminateGrace: {    // The number of seconds a soft terminate will wait before forcibly closing connections
         type: 'input',
         message: 'Terminate disconnect timeout (in seconds):',
         defaultValue: 60,
+        transform: parseInt,
         validate: is.nonNegativeNumber
     }
 });
@@ -353,5 +356,5 @@ function defer() {
 function noop() {}
 
 function round(value) {
-    return Math.round(value);
+    return Math.round(parseFloat(value));
 }
