@@ -1,10 +1,11 @@
 "use strict";
-var CustomError         = require('custom-error-instance');
-var file                = require('../util/file');
-var fs                  = require('fs');
-var is                  = require('../util/is');
-var path                = require('path');
-var schemata            = require('object-schemata');
+const CustomError         = require('custom-error-instance');
+const definition          = require('./definition');
+const file                = require('../util/file');
+const fs                  = require('fs');
+const is                  = require('../util/is');
+const path                = require('path');
+const schemata            = require('object-schemata');
 
 var Err = CustomError('ResourceError');
 Err.dne = CustomError(Err, { code: 'EDNE' });
@@ -59,10 +60,10 @@ function Resource(configuration) {
                         if (filesExist(directoryMap, [indexPath, defPath])) {
                             try {
                                 resourceMap[resource] = {
-                                    def: fs.readFileSync(defPath, 'utf8'),
+                                    def: definition(definition.RESOURCE, fs.readFileSync(defPath, 'utf8')),
                                     module: require(indexPath),
                                     subResources: {}
-                                }
+                                };
                             } catch (e) {
                                 delete resourceMap[resource];
                                 if (!config.srcErrorIgnore) throw e;
@@ -76,7 +77,7 @@ function Resource(configuration) {
                         if (filesExist(directoryMap, [indexPath, defPath])) {
                             try {
                                 resourceMap[resource].subResources[subResource] = {
-                                    def: fs.readFileSync(defPath, 'utf8'),
+                                    def: definition(definition.SUB_RESOURCE, fs.readFileSync(defPath, 'utf8')),
                                     module: require(indexPath)
                                 };
                             } catch (e) {
@@ -112,7 +113,7 @@ function Resource(configuration) {
              * Get the module for a resource or sub-resource.
              * @param {string} resourceName
              * @param {string} [subResourceName]
-             * @returns {*}
+             * @returns {*, undefined}
              */
             factory.get = function(resourceName, subResourceName) {
                 if (!resourceMap.hasOwnProperty(resourceName)) return;

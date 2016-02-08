@@ -7,10 +7,11 @@ var Connector       = require('./connector');
 var format          = require('cli-format');
 var inquirer        = require('inquirer');
 var Manager         = require('./manager');
+var Pool            = require('./pool');
 var Table           = require('cli-table2');
 
 exports.options = {
-    file: {
+    'db-file': {
         type: String,
         description: 'The path to the database file.',
         hidden: true,
@@ -143,19 +144,29 @@ function cfInterface(dbConn) {
             var questions = getQuestionsFromConfiguration(connector.schema.configuration, config);
             return cli.prompt(questions)
                 .then(function(answers) {
-                    return test(connector, answers)
-                        .then(function() {
-                            dbConn.set(name, connector.name, answers);
-                            return answers;
-                        });
+                    return test(connector, answers).then(() => answers);
                 });
+        }
+
+        function poolQuestions(config) {
+            var questions = getQuestionsFromConfiguration(pool.schema.configuration, config);
+            return cli.prompt(questions);
         }
 
         return cli.choices('Connector:', Connector.list())
             .then(function(connectorName) {
                 var connector = Connector.get(connectorName);
-                return connectorQuestions(connector, connectorConfig);
-            });
+                return connectorQuestions(connector, connectorConfig)
+                    .then(function(connectorConfig) {
+                        if (!connector.pool) {
+                            dbConn.set(name, connector.name, connectorConfig, {});
+                        } else {
+                            return poolQuestions({}).then(function(answers) {
+                                dbConn.set(name, connector.name, connectorConfig, {});
+                            });
+                        }
+                    });
+            })
     };
 
     menu.exit = function() {

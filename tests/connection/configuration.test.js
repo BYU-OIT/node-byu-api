@@ -5,13 +5,14 @@ var connectorUtil       = require('../../test-utils/database-connector');
 var expect              = require('chai').expect;
 var file                = require('../../bin/util/file');
 var is                  = require('../../bin/util/is');
+var Pool                = require('../../bin/database/pool');
 
 describe('database/configuration', function() {
     var fs = fakeFs();
-    var config = { file: '/config', password: '' };
+    var config = { dbFile: '/config', password: '' };
 
     describe('factory', function() {
-        var config = Configuration({ file: '/config' });
+        var config = Configuration({ dbFile: '/config' });
 
         it('requires file path', function() {
             expect(function() { Configuration(); }).to.throw(Error);
@@ -65,18 +66,18 @@ describe('database/configuration', function() {
 
         it('populates store', function() {
             var factory = Configuration(config);
-            return file.writeFile('/config', '{ "foo": { "connector": "bar", "config": { "user": "", "password": "" } } }')
+            return file.writeFile('/config', '{ "foo": { "connector": "bar", "config": { "user": "", "password": "" }, "pool": null } }')
                 .then(function() {
                     return Configuration(config).load()
                 })
                 .then(function(factory) {
-                    expect(factory.get('foo')).to.be.deep.equal({ connector: 'bar', config: { user: '', password: '' } });
+                    expect(factory.get('foo')).to.be.deep.equal({ connector: 'bar', config: { user: '', password: '' }, pool: null });
                 });
         });
 
         it('validates', function() {
             var factory = Configuration(config);
-            return file.writeFile('/config', '{ "foo": { "connector": "bar", "config": {} } }')
+            return file.writeFile('/config', '{ "foo": { "connector": "bar", "config": {}, "pool": null } }')
                 .then(function() {
                     return Configuration(config).load()
                 })
@@ -107,7 +108,8 @@ describe('database/configuration', function() {
             var expected = {
                 foo: {
                     connector: 'bar',
-                    config: { foo: 'bar'}
+                    config: { foo: 'bar'},
+                    pool: null
                 }
             };
 
@@ -123,9 +125,30 @@ describe('database/configuration', function() {
                 });
         });
 
+        it('plain with pool', function() {
+            var expected = {
+                foo: {
+                    connector: 'bar',
+                    config: { foo: 'bar'},
+                    pool: Pool.schema.normalize({})
+                }
+            };
+
+            return Configuration(config)
+                .set('foo', 'bar', { foo: 'bar' }, {})
+                .save()
+                .then(function() {
+                    return file.readFile('/config');
+                })
+                .then(function(content) {
+                    var o = JSON.parse(content);
+                    expect(o).to.be.deep.equal(expected);
+                });
+        });
+
         it('encrypted', function() {
             var factory;
-            return Configuration({ file: '/config', password: 'pass' })
+            return Configuration({ dbFile: '/config', password: 'pass' })
                 .set('foo', 'bar', {})
                 .save()
                 .then(function() {
@@ -142,7 +165,7 @@ describe('database/configuration', function() {
         var config;
 
         beforeEach(function() {
-            config = Configuration({ file: '/config' });
+            config = Configuration({ dbFile: '/config' });
             defineConnector();
         });
 
@@ -292,19 +315,4 @@ function fakeFs() {
     };
 
     return factory;
-}
-
-function fullConfig() {
-    return {
-        foo: {
-            connector: {
-                name: 'bar',
-                config: {
-                    user: 'Bob',
-                    password: 'pass'
-                }
-            },
-            pool: {}
-        }
-    }
 }

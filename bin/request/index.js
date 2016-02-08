@@ -108,21 +108,19 @@ Command.define('request',
 
 
 function isKvArgument(value) {
-    return typeof value === 'object' && value && Object.keys(value).length === 1;
+    return value.split('=').length === 2;
 }
 
 function options() {
     var result = Object.assign({}, exports.options, Database.options, Resource.options);
-    result.file.hidden = false;
+    result['db-file'].hidden = false;
+    result['db-file'].required = false;
     return result;
 }
 
 function transformKvArgument(value) {
     var ar = value.split('=');
-    var result;
-    if (ar.length === 2) {
-        result = {};
-        result[ar[0]] = ar[1];
-    }
+    var result = {};
+    result[ar[0]] = ar[1];
     return result;
 }

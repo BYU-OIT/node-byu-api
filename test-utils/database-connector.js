@@ -16,47 +16,26 @@ exports.clear = function () {
 exports.configuration = function(name, promises) {
     var config = {};
 
-    config.connect = function() {
-        return this.connect();
-    };
-
-    config.disconnect = function(conn) {
-        return conn.disconnect();
-    };
-
-    config.factory = function(config) {
-        var factory = {};
-
-        factory.connect = function() {
-            var factory = {};
-            var err;
-
-            factory.connect = function() {
-                var conn = {
-                    disconnect: function() {
-                        return promises ? Promise.resolve() : void 0;
-                    }
-                };
-                return promises ? Promise.resolve(conn) : conn;
-            };
-
-            if (factory.password !== 'pass') {
-                err = new Error('Incorrect password');
-                if (promises) {
-                    return Promise.reject(err);
-                } else {
-                    throw err;
+    config.connect = function(config) {
+        var connected = true;
+        var result = {
+            client: {
+                run: function() {
+                    if (!connected) throw Error('Not connected');
+                    return promises ? Promise.resolve('Ran') : 'Ran';
+                }
+            },
+            manager: {
+                disconnect: function() {
+                    connected = false;
+                    if (promises) return Promise.resolve();
+                },
+                query: function() {
+                    return promises ? Promise.resolve('Ran query') : 'Ran query';
                 }
             }
-
-            if (!promises) {
-                return factory;
-            } else {
-                return Promise.resolve(factory);
-            }
         };
-
-        return factory;
+        return promises ? Promise.resolve(result) : result;
     };
 
     config.name = name;

@@ -5,6 +5,7 @@ var CustomError     = require('custom-error-instance');
 var crypto          = require('crypto');
 var file            = require('./../util/file');
 var path            = require('path');
+var Pool            = require('./pool');
 var schemata        = require('object-schemata');
 
 const algorithm = 'aes-256-ctr';
@@ -32,7 +33,7 @@ function Configuration(configuration) {
 
     //get file path and password
     if (config.hasOwnProperty('password')) password = config.password;
-    filePath = path.resolve(process.cwd(), config.file);
+    filePath = path.resolve(process.cwd(), config.dbFile);
 
     /**
      * Change the password on the configuration store file.
@@ -111,21 +112,25 @@ function Configuration(configuration) {
      * @param {string} name The name of the configuration.
      * @param {string} connectorName The name of the connector.
      * @param {object} config A valid connector configuration for the connector specified.
+     * @param {object} [poolConfig] A valid pool configuration.
      * @returns {object}
      */
-    factory.set = function(name, connectorName, config) {
+    factory.set = function(name, connectorName, config, poolConfig) {
         var connector;
 
         if (!name || typeof name !== 'string') throw Err.set('Configuration name must be a string.');
         if (!connectorName || typeof connectorName !== 'string') throw Err.set('Configuration connectorName must be a string.');
         if (!config || typeof config !== 'object') throw Err.set('Property "config" must be an object for connection: ' + name);
+        if (poolConfig && typeof poolConfig !== 'object') throw Err.set('Property "poolConfig" must be an object for connection: ' + name);
 
         connector = Connector.get(connectorName);
         config = connector.schema.normalize(config);
+        poolConfig = poolConfig ? Pool.schema.normalize(poolConfig) : null;
 
         store[name] = {
             connector: connectorName,
-            config: config
+            config: config,
+            pool: poolConfig
         };
 
         return factory;
@@ -135,7 +140,7 @@ function Configuration(configuration) {
 }
 
 Configuration.schema = schemata({
-    file: {
+    dbFile: {
         help: 'This value must be a string.',
         required: true,
         validate: function(value, is) {

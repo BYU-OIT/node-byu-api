@@ -16,7 +16,8 @@ describe('database/manager', function() {
             connector: 'bar',
             config: {
                 user: 'Bob'
-            }
+            },
+            pool: null
         }
     };
 
@@ -26,21 +27,71 @@ describe('database/manager', function() {
 
     after(connectorUtil.clear);
 
-    it('returns a promise', function() {
-        expect(Manager(config)).to.be.instanceof(Promise);
+    it('returns a factory', function() {
+        expect(Manager(config)).to.be.an('object');
     });
 
-    it('resolves to an object', function() {
-        return expect(Manager(config)).to.eventually.be.an('object');
+    describe('#connections', function() {
+
+        it('is a function', function() {
+            expect(Manager(config).connections).to.be.a('function');
+        });
+
+        it('returns a promise', function() {
+            expect(Manager(config).connections([])).to.be.instanceof(Promise);
+        });
+
+        it('resolves to an object', function() {
+            return expect(Manager(config).connections([])).to.eventually.be.an('object');
+        });
+
+        it('resolves to an object with done function', function() {
+            return Manager(config).connections([])
+                .then(function(result) {
+                    expect(result.done).to.be.a('function');
+                });
+        });
+
+        it('resolves to an object with connections map', function() {
+            return Manager(config).connections(['foo'])
+                .then(function(result) {
+                    expect(result.connections).to.be.an('object');
+                    expect(result.connections.foo.run).to.be.a('function');
+                });
+        });
+
     });
 
-    it('has connect, exit, and test', function() {
-        return Manager(config)
-            .then(function(factory) {
-                expect(factory.connect.foo).to.be.a('function');
-                expect(factory.exit).to.be.a('function');
-                expect(factory.test.foo).to.be.a('function');
-            });
+    describe('#query', function() {
+
+        it('is a function', function() {
+            expect(Manager(config).query).to.be.a('function');
+        });
+
+        it('returns a promise', function() {
+            expect(Manager(config).query('foo')).to.be.instanceof(Promise);
+        });
+
+        it('resolves to Ran query', function() {
+            expect(Manager(config).query('foo')).to.eventually.be.equal('Ran query');
+        });
+
+    });
+
+    describe('#test', function() {
+
+        it('is a function', function() {
+            expect(Manager(config).test).to.be.a('function');
+        });
+
+        it('returns a promise', function() {
+            expect(Manager(config).test('foo')).to.be.instanceof(Promise);
+        });
+
+        it('resolves to true', function() {
+            expect(Manager(config).test('foo')).to.eventually.be.equal(true);
+        });
+
     });
 
 });

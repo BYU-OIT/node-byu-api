@@ -1,12 +1,14 @@
 "use strict";
-var Connector           = require('./connector');
 var CustomError         = require('custom-error-instance');
+var defer               = require('../util/defer');
+var exit                = require('../util/exit');
 var is                  = require('../util/is');
 var Promise             = require('bluebird');
+var promiseWrap         = require('../util/promise-wrap');
 var schemata            = require('object-schemata');
 var timeoutQueue        = require('../util/timeout-queue');
 
-var Err = CustomError('ConnPoolError');
+var Err = CustomError('ConnectionPoolError');
 Err.limit = CustomError(Err, { code: 'ELIMIT', message: 'Database connection pool exhausted.' });
 Err.terminated = CustomError(Err, { code: 'ETERM', message: 'The database connection pool has been terminated.' });
 Err.timeout = CustomError(Err, { code: 'ETIME', message: 'Get database connection timed out.' });
@@ -14,21 +16,19 @@ Err.revoked = CustomError(Err, { code: 'ERVOK', message: 'Connection unavailable
 
 module.exports = Pool;
 
-function Pool(connectorName, connectorConfiguration, poolConfiguration) {
+function Pool(connect, configuration) {
     var available;
-    var connector = Connector.get(connectorName);
-    var factory = {};
     var growing = 0;
-    var poolConfig = Pool.options.normalize(poolConfiguration);
+    var poolConfig = Pool.schema.normalize(configuration || {});
     var pending;
     var terminate;
     var unavailable = [];
 
     //manage available connections and idle timeout
     available = timeoutQueue(poolConfig.poolTimeout * 1000, function(conn) {
-        // if the pool can strink then shrink it, otherwise add the connection back to available list
+        // if the pool can shrink then shrink it, otherwise add the connection back to available list
         if (available.length + unavailable.length >= poolConfig.poolMin) {
-            disconnect(conn);
+            conn.manager.disconnect();
         } else {
             available.add(conn);
         }
@@ -40,14 +40,99 @@ function Pool(connectorName, connectorConfiguration, poolConfiguration) {
     });
 
     /**
-     * Get a database connection.
-     * @returns {Promise}
+     * Get the number of connections that are either immediately available or can be made
+     * available by growing the connection pool.
+     * @readonly
+     * @type {number}
      */
-    factory.connect = function() {
-        var conn;
+    getter('available', () => poolConfig.poolMax - unavailable.length);
+
+    /**
+     * Get the number of connections that are immediately available.
+     * @readonly
+     * @type {number}
+     */
+    getter('immediate', () => available.length);
+
+    /**
+     * Get the current pool size.
+     * @readonly
+     * @type {number}
+     */
+    getter('poolSize', () => available.length + growing + unavailable.length);
+
+    exit.listen(function() {
+        terminate = [];
+        return new Promise(function(resolve, reject) {
+            var conn;
+
+            function settle() {
+                return Promise.settle(terminate)
+                    .then(function(results) {
+                        var errors = results.filter((r) => r.isRejected());
+                        if (errors.length > 0) {
+                            reject(new Err('One or more connections could not disconnect:\n\t' + e.join('\n\t')));
+                        } else {
+                            resolve();
+                        }
+                    });
+            }
+
+            // inform all pending of failure to connect
+            while (pending.length > 0) pending.get().reject(Err.terminated);
+
+            // terminate available connections first
+            while (conn = available.get()) terminate.push(conn.manager.disconnect());
+
+            //set a timeout that will do hard disconnects
+            if (unavailable.length > 0) {
+                setTimeout(function () {
+                    var conn;
+                    while (conn = unavailable.shift()) terminate.push(conn.manager.disconnect());
+                    settle();
+                }, poolConfig.terminateGrace * 1000);
+            } else {
+                settle();
+            }
+        });
+    });
+
+
+
+
+    function getter(name, callback) {
+        Object.defineProperty(poolConnect, name, {
+            enumerable: true,
+            get: callback
+        });
+    }
+
+    function lease() {
+        var conn = available.get();
+        var disconnect;
+
+        // add connection to unavailable
+        unavailable.push(conn);
+
+        // store the old disconnect and overwrite it
+        disconnect = conn.manager.disconnect;
+        conn.manager.disconnect = function() {
+            if (!terminate) {
+                conn.manager.disconnect = disconnect;
+                available.add(conn);
+                if (pending.length > 0) pending.get().resolve(lease());
+            } else {
+                disconnect();
+            }
+        };
+
+        return conn;
+    }
+
+    function poolConnect(connConfig) {
         var diff;
         var i;
-        var poolSize = factory.poolSize;
+        var poolSize = poolConnect.poolSize;
         var deferred;
         var size;
 
@@ -77,12 +162,12 @@ function Pool(connectorName, connectorConfiguration, poolConfiguration) {
 
             //add connections
             for (i = 0; i < diff; i++) {
-                connector.connect(connectorConfiguration)
+                promiseWrap(() => connect(connConfig))
                     .then(function(conn) {
                         growing--;
 
                         if (terminate) {
-                            terminate.push(disconnect(conn));
+                            terminate.push(conn.manager.disconnect());
 
                         } else {
                             available.add(conn);
@@ -97,187 +182,14 @@ function Pool(connectorName, connectorConfiguration, poolConfiguration) {
         }
 
         return deferred.promise;
-    };
-
-    /**
-     * Terminate the connection pool, closing all connects and removing the ability to add any more.
-     * @param {boolean} [hard=false] Set to true to force connections to disconnect immediately.
-     */
-    factory.terminate = function(hard) {
-        return new Promise(function(resolve, reject) {
-            var conn;
-            var leaseObject;
-
-            function settle() {
-                var promises = [];
-                var errors = [];
-                terminate.forEach(function(promise) {
-                    var p = promise
-                        .catch(function(e) {
-                            errors.push(e);
-                        });
-                    promises.push(p)
-                });
-                return Promise.all(promises)
-                    .then(function() {
-                        if (errors.length > 0) {
-                            reject(new Err('One or more connections could not disconnect:\n\t' + e.join('\n\t')));
-                        } else {
-                            resolve();
-                        }
-                    });
-            }
-
-            // initialize terminate
-            terminate = [];
-
-            // inform all pending of failure to connect
-            while (pending.length > 0) pending.get().reject(Err.terminated);
-
-            // terminate available connections first
-            while (conn = available.get()) terminate.push(disconnect(conn));
-
-            // if doing hard disconnects then disconnect them now
-            if (hard) {
-                while (leaseObject = unavailable.shift()) terminate.push(disconnectLease(leaseObject));
-                settle();
-
-            //set a timeout that will do hard disconnects
-            } else {
-                setTimeout(function () {
-                    while (leaseObject = unavailable.shift()) terminate.push(disconnectLease(leaseObject));
-                    settle();
-                }, poolConfig.terminateGrace * 1000);
-            }
-        });
-    };
-
-    /**
-     * Get the number of connections that are either immediately available or can be made
-     * available by growing the connection pool.
-     * @readonly
-     * @type {number}
-     */
-    getter('available', () => poolConfig.poolMax - unavailable.length);
-
-    /**
-     * Get the number of connections that are immediately available.
-     * @readonly
-     * @type {number}
-     */
-    getter('immediate', () => available.length);
-
-    /**
-     * Get the current pool size.
-     * @readonly
-     * @type {number}
-     */
-    getter('poolSize', () => available.length + growing + unavailable.length);
-
-
-
-
-    function getter(name, callback) {
-        Object.defineProperty(factory, name, {
-            enumerable: true,
-            get: callback
-        });
     }
 
-    function disconnect(conn) {
-        try {
-            return Promise.resolve(conn[connector.disconnect]());
-        } catch (e) {
-            return Promise.reject(e);
-        }
-    }
 
-    function disconnectLease(leaseObj) {
-        leaseObj.revoke();
-        return leaseObj.returnPromise.then(function() {
-            return disconnect(leaseObj.conn);
-        });
-    }
-
-    function lease() {
-        var conn = available.get();
-        var deferred = defer();
-        var result = {};
-        var revoked = false;
-
-        function revoke() {
-            var index;
-            if (!revoked) {
-                revoked = true;
-                index = unavailable.indexOf(deferred.promise);
-                unavailable.splice(index, 1);
-                deferred.resolve(conn);
-            }
-        }
-
-        // add promise to unavailable
-        unavailable.push({
-            conn: conn,
-            returnPromise: deferred.promise,
-            revoke: revoke
-        });
-
-        // create a copy of the object
-        Object.keys(conn).forEach(function(key) {
-            var value = conn[key];
-            var config = Object.getOwnPropertyDescriptor(conn, key);
-            Object.defineProperty(result, key, {
-                enumerable: config.enumerable,
-                configurable: true,
-                get: function() {
-                    if (revoked) throw new Err.revoked();
-                    return config.hasOwnProperty('value') ? value : conn[key];
-                },
-                set: function(v) {
-                    if (revoked) throw new Err.revoked();
-                    if (!config.hasOwnProperty('value')) throw new Err('Cannot set property value');
-                    value = v;
-                }
-            });
-        });
-
-        Object.defineProperty(result, connector.disconnect, {
-            enumerable: true,
-            configurable: true,
-            value: function() {
-                if (revoked) throw new Err.revoked();
-                revoke();
-                return Promise.resolve();
-            },
-            writable: false
-        });
-
-        deferred.promise.then(function(conn) {
-            if (!terminate) {
-                available.add(conn);
-                if (pending.length > 0) pending.get().resolve(lease());
-            }
-        });
-
-        Object.freeze(result);
-        return result;
-    }
-
-    // build connections up to the min pool size
-    (function() {
-        var i;
-        for (i = 0; i < poolConfig.poolMin; i++) {
-            factory.connect().then(function(conn) {
-                disconnect(conn);
-            });
-        }
-    })();
-
-    return factory;
+    return poolConnect;
 }
 
-Pool.options = schemata({
-    connectTimeout: {
+Pool.schema = schemata({
+    connectTimeout: {                               // The number of seconds a connection request should wait before being rejected
         type: 'input',
         message: 'Connect timeout:',
         help: 'This value must be a non-negative number.',
@@ -333,27 +245,6 @@ Object.defineProperty(Pool, 'error', {
     value: Err,
     writable: false
 });
-
-
-/**
- * Get a deferred object.
- * @returns {object}
- */
-function defer() {
-    var resolve
-    var reject;
-    var promise = new Promise(function() {
-        resolve = arguments[0];
-        reject = arguments[1];
-    });
-    return {
-        resolve: resolve,
-        reject: reject,
-        promise: promise
-    };
-}
-
-function noop() {}
 
 function round(value) {
     return Math.round(parseFloat(value));

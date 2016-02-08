@@ -1,5 +1,5 @@
 "use strict";
-var Command         = require('command-line-callback');
+//var Command         = require('command-line-callback');
 
 exports.options = {
     def: {
@@ -15,20 +15,20 @@ exports.options = {
         defaultValue: './',
         group: 'resource'
     },
-    'src-error-ignore': {
+    srcErrorIgnore: {
         type: Boolean,
         description: 'If a syntax error is encountered on a resource then it will throw an error unless this option ' +
         'is set. If this option is set then the resource will simply not be registered without throwing an error.',
         group: 'resource'
     },
-    'src-limit': {
+    srcLimit: {
         type: String,
         description: 'The resource name to limit loaded resources to.',
         help: 'The greatest benefit of this option is to reduce the initial startup time of the application.',
         multiple: true,
         group: 'resource'
     },
-    'src-index': {
+    srcIndex: {
         type: String,
         description: 'The name of the file to call for each resource or sub-resource to bootstrap the functionality ' +
         'for that resource or sub-resource.',

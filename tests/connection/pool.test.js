@@ -1,4 +1,95 @@
 "use strict";
+var expect          = require('chai').expect;
+var Pool            = require('../../bin/database/pool');
+var Promise         = require('bluebird');
+
+
+describe('database/pool', function() {
+
+    describe('pool', function() {
+
+        it('is a function', function() {
+            var p = Pool(connect, {});
+            expect(p).to.be.a('function');
+        });
+
+        it('has available', function() {
+            var p = Pool(connect, {});
+            expect(p.available).to.be.a('number');
+        });
+
+        it('has immediate', function() {
+            var p = Pool(connect, {});
+            expect(p.immediate).to.be.a('number');
+        });
+
+        it('has poolSize', function() {
+            var p = Pool(connect, {});
+            expect(p.poolSize).to.be.a('number');
+        });
+
+        it('returns a promise 1', function() {
+            var p = Pool(connect, {});
+            expect(p()).to.be.instanceof(Promise);
+        });
+
+        it('returns a promise 2', function() {
+            var p = Pool(connectPromise(0), {});
+            expect(p()).to.be.instanceof(Promise);
+        });
+
+    });
+
+    describe('timeout', function() {
+
+        it('time out', function() {
+            var p = Pool(connectPromise(100), { connectTimeout: .05 });
+            return p()
+                .catch(function(e) {
+                    expect(e).to.be.instanceof(Pool.error.timeout);
+                });
+        });
+
+        it('does not time out', function() {
+            var p = Pool(connectPromise(50), { connectTimeout: .1 });
+            return p()
+                .then(function(conn) {
+                    expect(conn.disconnect).to.be.a('function');
+                });
+        });
+
+    });
+
+});
+
+function connect() {
+    var connected = true;
+    var client = {
+        run: function(input) {
+            if (!connected) throw Error('Disconnected');
+            return 'Ran ' + input;
+        }
+    };
+    var manager = {
+        disconnect: function() {
+            connected = false;
+        },
+        query: client.run
+    };
+
+    return {
+        client: client,
+        manager: manager
+    }
+}
+
+function connectPromise(delay) {
+    return function() {
+        return Promise.delay(delay).then(() => connect());
+    }
+}
+
+
 /*
 var connector       = require('../../bin/connection/connector');
 var expect          = require('chai').expect;
@@ -7,87 +98,9 @@ var Promise         = require('bluebird');
 
 describe('database/pool', function() {
 
-    describe('factory', function() {
 
-        before(function() {
-            connector.define('factory', 'disconnect', {}, function(config) {
-                var factory = {};
-                factory.disconnect = function() {};
-                return factory;
-            });
-        });
 
-        after(function() {
-            connector.remove('factory');
-        });
 
-        it('is object', function() {
-            var p = Pool('factory', {}, {});
-            expect(p).to.be.an('object');
-            expect(p).to.be.ok;
-        });
-
-        it('has available', function() {
-            var p = Pool('factory', {}, {});
-            expect(p.available).to.be.a('number');
-        });
-
-        it('has connect', function() {
-            var p = Pool('factory', {}, {});
-            expect(p.connect).to.be.a('function');
-        });
-
-        it('has immediate', function() {
-            var p = Pool('factory', {}, {});
-            expect(p.immediate).to.be.a('number');
-        });
-
-        it('has poolSize', function() {
-            var p = Pool('factory', {}, {});
-            expect(p.poolSize).to.be.a('number');
-        });
-
-        it('has terminate', function() {
-            var p = Pool('factory', {}, {});
-            expect(p.terminate).to.be.a('function');
-        });
-
-    });
-
-    describe('timeout', function() {
-
-        before(function() {
-            connector.define('timeout', 'disconnect', {}, function(config) {
-                var factory = {};
-                factory.disconnect = function() {};
-                return Promise.delay(config.delay)
-                    .then(function() {
-                        return factory;
-                    });
-            });
-        });
-
-        after(function() {
-            connector.remove('timeout');
-        });
-
-        it('time out', function() {
-            var p = Pool('timeout', { delay: 100 }, { connectTimeout: .05 });
-            return p.connect()
-                .catch(function(e) {
-                    expect(e).to.be.instanceof(Pool.error.timeout);
-                });
-        });
-
-        it('does not time out', function() {
-            var p = Pool('timeout', { delay: 50 }, { connectTimeout: .1 });
-            return p.connect()
-                .then(function(conn) {
-                    expect(conn.disconnect).to.be.a('function');
-                });
-        });
-
-    });
 
     describe('pool size', function() {
 

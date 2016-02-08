@@ -26,18 +26,6 @@ describe('database/connector', function() {
             expect(() => Connector.define(config)).to.throw(schemata.error);
         });
 
-        it('missing required disconnect', function() {
-            var config = connectorUtil.configuration('a');
-            delete config.disconnect;
-            expect(() => Connector.define(config)).to.throw(schemata.error);
-        });
-
-        it('missing required factor', function() {
-            var config = connectorUtil.configuration('a');
-            delete config.factory;
-            expect(() => Connector.define(config)).to.throw(schemata.error);
-        });
-
         it('missing required name', function() {
             var config = connectorUtil.configuration('a');
             delete config.name;

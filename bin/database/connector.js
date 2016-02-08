@@ -1,4 +1,5 @@
 "use strict";
+// The purpose of this file is to load connectors and store connectors.
 var CustomError     = require('custom-error-instance');
 var file            = require('../util/file');
 var is              = require('../util/is');
@@ -12,6 +13,7 @@ ConnectorError.undefined = CustomError(ConnectorError, { code: 'EUDEF' });
 ConnectorError.config = CustomError(ConnectorError, { code: "ECNFG" }, function() {
     this.message = 'The connector has an invalid configuration: ' + this.message;
 });
+ConnectorError.noimp = CustomError(ConnectorError, { code: 'ENIMP' });
 
 var connectorsLoadPromise;
 var defineSchema;
@@ -48,13 +50,13 @@ exports.exists = function(name) {
 };
 
 /**
- * Get an existing connector object.
+ * Get a copy of an existing connector object.
  * @param {string} name The name of the connector to get.
  * @returns {object}
  */
 exports.get = function(name) {
     if (!store.hasOwnProperty(name)) throw new ConnectorError.undefined('Connector not defined: ' + name);
-    return store[name];
+    return Object.assign({}, store[name]);
 };
 
 /**
@@ -70,7 +72,7 @@ exports.list = function() {
  * @returns {*}
  */
 exports.load = function() {
-    if (!connectorsLoadPromise) connectorsLoadPromise = requireDir(path.resolve(__dirname, '../connectors'));
+    if (!connectorsLoadPromise) connectorsLoadPromise = requireDirectory(path.resolve(__dirname, '../connectors'));
     return connectorsLoadPromise;
 };
 
@@ -86,28 +88,10 @@ exports.remove = function(name) {
 
 defineSchema = schemata({
     connect: {
-        description: 'The function to call to get a connection from the factory. This function is scoped to the factory.',
+        description: 'The function to call to get a database connection.',
         required: true,
         validate: is.function,
         help: 'The connect must be a function.'
-    },
-    disconnect: {
-        description: 'The function to call to disconnect a connect. The function receives a connection as its parameter. This function is scoped to the factory.',
-        required: true,
-        validate: is.function,
-        help: 'The disconnect must be a function.'
-    },
-    exit: {
-        description: 'The function to call when the application is shutting down. This function is scoped to the factory.',
-        defaultValue: defaultExit,
-        validate: is.function,
-        help: 'The exit must be a function.'
-    },
-    factory: {
-        description: 'The function to call to build the factory. This function receives a normalized configuration as its parameter.',
-        required: true,
-        validate: is.function,
-        help: 'The exit must be a function.'
     },
     name: {
         description: 'The unique name for the connector.',
@@ -120,6 +104,10 @@ defineSchema = schemata({
         defaultValue: {},
         validate: is.object,
         help: 'The options must be an object.'
+    },
+    pool: {
+        description: 'Whether to use the connection pool or not.',
+        defaultValue: false
     }
 });
 
