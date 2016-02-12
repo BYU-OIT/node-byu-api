@@ -7,11 +7,10 @@ var Connector       = require('./connector');
 var format          = require('cli-format');
 var inquirer        = require('inquirer');
 var Manager         = require('./manager');
-var Pool            = require('./pool');
 var Table           = require('cli-table2');
 
 exports.options = {
-    'db-file': {
+    dbFile: {
         type: String,
         description: 'The path to the database file.',
         hidden: true,
@@ -27,7 +26,7 @@ exports.options = {
 
 Command.define('database-file',
     function(configuration) {
-        return loadConfigurationFile(configuration)
+        return Manager.load(configuration)
             .catch(function(e) {
                 if (e instanceof Configuration.error.noPass) return authInterface(configuration);
                 throw e;
@@ -39,7 +38,7 @@ Command.define('database-file',
     },
     {
         brief: 'Create or update a connection file.',
-        defaultOption: 'file',
+        defaultOption: 'dbFile',
         synopsis: [
             '[OPTIONS]... [FILE]'
         ],
@@ -61,7 +60,7 @@ function authInterface(config) {
         ])
         .then(function(answers) {
             config.password = answers.password;
-            return loadConfigurationFile(config)
+            return Manager.load(config)
         });
 }
 
@@ -70,9 +69,11 @@ function authInterface(config) {
  * @param dbConn The connection file factory.
  * @returns {Promise}
  */
-function cfInterface(dbConn) {
+function cfInterface(manager) {
+    var dbConn = manager.dbConfig;
     var menu = {};
     var changes = false;
+
 
     menu.changePassword = function() {
         return cli
@@ -120,8 +121,8 @@ function cfInterface(dbConn) {
     menu.edit = function(name, connectorConfig) {
         changes = true;
 
-        function test(connector, config) {
-            return connector.test(config)
+        function test(connectorName, connector, config) {
+            return Manager.test(connectorName, config)
                 .then(function(result) {
                     var message;
                     if (result === true) {
@@ -131,8 +132,8 @@ function cfInterface(dbConn) {
                         return cli.choices(message, ['Re-enter', 'Retry', 'Ignore'])
                             .then(function(answer) {
                                 switch (answer.toLowerCase()) {
-                                    case 're-enter': return connectorQuestions(connector, config);
-                                    case 'retry': return test(connector, config);
+                                    case 're-enter': return connectorQuestions(connectorName, connector, config);
+                                    case 'retry': return test(connectorName, connector, config);
                                     case 'ignore': return;
                                 }
                             });
@@ -140,11 +141,11 @@ function cfInterface(dbConn) {
                 });
         }
 
-        function connectorQuestions(connector, config) {
+        function connectorQuestions(connectorName, connector, config) {
             var questions = getQuestionsFromConfiguration(connector.schema.configuration, config);
             return cli.prompt(questions)
                 .then(function(answers) {
-                    return test(connector, answers).then(() => answers);
+                    return test(connectorName, connector, answers).then(() => answers);
                 });
         }
 
@@ -156,7 +157,7 @@ function cfInterface(dbConn) {
         return cli.choices('Connector:', Connector.list())
             .then(function(connectorName) {
                 var connector = Connector.get(connectorName);
-                return connectorQuestions(connector, connectorConfig)
+                return connectorQuestions(connectorName, connector, connectorConfig)
                     .then(function(connectorConfig) {
                         if (!connector.pool) {
                             dbConn.set(name, connector.name, connectorConfig, {});
@@ -295,8 +296,7 @@ function connectionStatus(dbConn) {
 
     //test each connection
     list.forEach(function(item, index) {
-        var connector =  Connector.get(item.connector);
-        var promise = connector.test(item.config)
+        var promise = Manager.test(item.connector, item.config)
             .then(function(result) {
                 list[index].connected = result === true ?
                     chalk.green('\u2714 Yes') :
@@ -344,8 +344,4 @@ function getQuestionsFromConfiguration(config, prevValues) {
             }
             return o;
         });
-}
-
-function loadConfigurationFile(config) {
-    return Manager.loadConnectors().then(Configuration(config).load);
 }

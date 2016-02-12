@@ -26,7 +26,7 @@ module.exports = Configuration;
  */
 function Configuration(configuration) {
     var config = Configuration.schema.normalize(configuration || {});
-    var factory = {};
+    var factory = Object.create(Configuration.prototype);
     var filePath;
     var password = '';
     var store = {};

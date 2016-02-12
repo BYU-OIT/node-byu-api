@@ -1,7 +1,9 @@
 "use strict";
+var chalk           = require('chalk');
 var Command         = require('command-line-callback');
 var Database        = require('../database/index');
 var Handler         = require('./handler');
+var Logger          = require('../log/index');
 var Manager         = require('../database/manager');
 var Resource        = require('../resource/index');
 var ResourceLoader  = require('../resource/loader');
@@ -17,8 +19,11 @@ exports.options = {
     cookie: {
         alias: 'c',
         type: String,
-        description: 'A key value pair that is separated by an equals. You can add multiple cookies by ' +
-        'using multiple flags. Example usage: [APPLICATION] [COMMAND] --cookie foo=value1 --cookie bar=value2',
+        description: function(p) {
+            return 'A key value pair that is separated by an equals. You can add multiple cookies by ' +
+                'using multiple flags. Example usage: ' +
+                chalk.italic(p.app + ' ' + p.command + ' --cookie foo=value1 --cookie bar=value2');
+        },
         multiple: true,
         transform: transformKvArgument,
         validate: isKvArgument,
@@ -27,8 +32,11 @@ exports.options = {
     header: {
         alias: 'h',
         type: Object,
-        description: 'A key value pair that is separated by an equals. You can add multiple headers by ' +
-        'using multiple flags. Example usage: [APPLICATION] [COMMAND] --header foo=value1 --header bar=value2',
+        description: function(p) {
+            return 'A key value pair that is separated by an equals. You can add multiple headers by ' +
+                'using multiple flags. Example usage: ' +
+                chalk.italic(p.app + ' ' + p.command + ' --header foo=value1 --header bar=value2');
+        },
         multiple: true,
         transform: transformKvArgument,
         validate: isKvArgument,
@@ -47,9 +55,11 @@ exports.options = {
     query: {
         alias: 'q',
         type: String,
-        description: 'A key value pair that is separated by an equals. You can add multiple query string ' +
-        'parameters by using multiple flags. Example usage: ' +
-        '[APPLICATION] [COMMAND] --query foo=value1 --query bar=value2',
+        description: function(p) {
+            return 'A key value pair that is separated by an equals. You can add multiple query string ' +
+                'parameters by using multiple flags. Example usage: ' +
+                chalk.italic(p.app + ' ' + p.command + ' --query foo=value1 --query bar=value2');
+        },
         multiple: true,
         transform: transformKvArgument,
         validate: isKvArgument,
@@ -81,6 +91,7 @@ Command.define('request',
 
         promises.push(Manager.load(configuration));
         promises.push(ResourceLoader(configuration));
+        Logger.cli(configuration);
 
         return Promise.all(promises)
             .then(function(results) {
@@ -100,7 +111,8 @@ Command.define('request',
         groups: {
             database: 'Database File Options',
             request: 'Request Options',
-            resource: 'Resource Options'
+            resource: 'Resource Options',
+            log: 'Log Options'
         },
         options: options()
     });
@@ -112,9 +124,9 @@ function isKvArgument(value) {
 }
 
 function options() {
-    var result = Object.assign({}, exports.options, Database.options, Resource.options);
-    result['db-file'].hidden = false;
-    result['db-file'].required = false;
+    var result = Object.assign({}, exports.options, Database.options, Resource.options, Logger.options);
+    result.dbFile.hidden = false;
+    result.dbFile.required = false;
     return result;
 }
 

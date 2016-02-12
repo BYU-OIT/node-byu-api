@@ -30,12 +30,16 @@ describe('database/pool', function() {
 
         it('returns a promise 1', function() {
             var p = Pool(connect, {});
-            expect(p()).to.be.instanceof(Promise);
+            var conn = p();
+            expect(conn).to.be.instanceof(Promise);
+            return conn.then((c) => c.manager.disconnect());
         });
 
         it('returns a promise 2', function() {
             var p = Pool(connectPromise(0), {});
-            expect(p()).to.be.instanceof(Promise);
+            var conn = p();
+            expect(conn).to.be.instanceof(Promise);
+            return conn.then((c) => c.manager.disconnect());
         });
 
     });
@@ -54,11 +58,142 @@ describe('database/pool', function() {
             var p = Pool(connectPromise(50), { connectTimeout: .1 });
             return p()
                 .then(function(conn) {
-                    expect(conn.disconnect).to.be.a('function');
+                    expect(conn.client).to.be.an('object');
+                    expect(conn.manager).to.be.an('object');
+                    return conn.manager.disconnect();
                 });
         });
 
     });
+
+    describe('pool size', function() {
+
+        it('increment 1, max 4', function() {
+            var p = Pool(connect, { poolIncrement: 1, poolMax: 4 });
+
+            expect(p.available).to.be.equal(4);
+            expect(p.immediate).to.be.equal(0);
+
+            return p()
+                .then(function(conn) {
+                    expect(p.available).to.be.equal(3);
+                    expect(p.immediate).to.be.equal(0);
+                    return conn.manager.disconnect();
+                })
+                .then(function() {
+                    expect(p.available).to.be.equal(4);
+                    expect(p.immediate).to.be.equal(1);
+                    return p.terminate(true);
+                });
+
+        });
+
+        it('increment 2, max 4', function() {
+            var p = Pool(connect, { poolIncrement: 2, poolMax: 4 });
+            return p()
+                .then(function(conn) {
+                    expect(p.available).to.be.equal(3);
+                    expect(p.immediate).to.be.equal(1);
+                    return conn.manager.disconnect();
+                })
+                .then(function() {
+                    expect(p.available).to.be.equal(4);
+                    expect(p.immediate).to.be.equal(2);
+                    return p.terminate(true);
+                });
+        });
+
+        it('increment 3, max 4', function() {
+            var p = Pool(connect, { poolIncrement: 3, poolMax: 4 });
+            return p()
+                .then(function() {
+                    expect(p.available).to.be.equal(3);
+                    expect(p.immediate).to.be.equal(2);
+                    return Promise.join(p(), p());
+                })
+                .then(function() {
+                    expect(p.available).to.be.equal(1);
+                    expect(p.immediate).to.be.equal(0);
+                    return p();
+                })
+                .then(function() {
+                    expect(p.available).to.be.equal(0);
+                    expect(p.immediate).to.be.equal(0);
+                    return p.terminate(true);
+                });
+        });
+
+    });
+
+    describe('max size', function() {
+
+        it('within max', function() {
+            var p = Pool(connect, { poolMax: 2 });
+            return p()
+                .then(function() {
+                    expect(p.available).to.be.equal(1);
+                    return p();
+                })
+                .then(function() {
+                    expect(p.available).to.be.equal(0);
+                    return p.terminate(true);
+                });
+        });
+
+        it('overflow max', function() {
+            var p = Pool(connect, { poolMax: 1 });
+            return p()
+                .then(function() {
+                    expect(p.available).to.be.equal(0);
+                    return p();
+                })
+                .catch(function(e) {
+                    expect(e).to.be.instanceof(Pool.error.limit);
+                })
+                .then(() => p.terminate(true));
+        });
+
+    });
+
+    describe('min and pool timeout', function() {
+
+        it('initialize to min', function() {
+            var p = Pool(connect, { poolMin: 2, poolMax: 4 });
+            return Promise.delay(5)
+                .then(function() {
+                    expect(p.available).to.be.equal(4);
+                    expect(p.immediate).to.be.equal(2);
+                    return p.terminate(true);
+                });
+        });
+
+        it('idle timeout', function() {
+            var p = Pool(connect, { poolMin: 1, poolMax: 4, poolTimeout: .05 });
+            return Promise.delay(50)
+                .then(function() {
+                    expect(p.available).to.be.equal(4);
+                    expect(p.immediate).to.be.equal(1);
+                    return Promise.all([p(), p()])
+                        .then(function(conns) {
+                            return Promise.all([
+                                conns[0].manager.disconnect(),
+                                conns[1].manager.disconnect()
+                            ]);
+                        });
+                })
+                .then(function() {
+                    expect(p.available).to.be.equal(4);
+                    expect(p.immediate).to.be.equal(2);
+                    return Promise.delay(100);
+                })
+                .then(function() {
+                    expect(p.available).to.be.equal(4);
+                    expect(p.immediate).to.be.equal(1);
+                    return p.terminate(true);
+                });
+        });
+    });
+
 
 });
 
@@ -97,152 +232,6 @@ var Pool            = require('../../bin/connection/pool');
 var Promise         = require('bluebird');
 
 describe('database/pool', function() {
-
-
-
-
-
-    describe('pool size', function() {
-
-        before(function() {
-            connector.define('size', 'disconnect', {}, function(config) {
-                var factory = {};
-                factory.disconnect = function() {};
-                return factory;
-            });
-        });
-
-        after(function() {
-            connector.remove('size');
-        });
-
-        it('increment 1', function() {
-            var p = Pool('size', {}, { poolIncrement: 1, poolMax: 4 });
-            return p.connect()
-                .then(function(conn) {
-                    expect(p.available).to.be.equal(3);
-                    expect(p.immediate).to.be.equal(0);
-                    return conn.disconnect();
-                })
-                .then(function(conn) {
-                    expect(p.available).to.be.equal(4);
-                    expect(p.immediate).to.be.equal(1);
-                });
-        });
-
-        it('increment 2', function() {
-            var p = Pool('size', {}, { poolIncrement: 2, poolMax: 4 });
-            return p.connect()
-                .then(function(conn) {
-                    expect(p.available).to.be.equal(3);
-                    expect(p.immediate).to.be.equal(1);
-                    return conn.disconnect();
-                })
-                .then(function() {
-                    expect(p.available).to.be.equal(4);
-                    expect(p.immediate).to.be.equal(2);
-                });
-        });
-
-        it('increment 3', function() {
-            var p = Pool('size', {}, { poolIncrement: 3, poolMax: 4 });
-            return p.connect()
-                .then(function() {
-                    expect(p.available).to.be.equal(3);
-                    expect(p.immediate).to.be.equal(2);
-                    return Promise.join(p.connect(), p.connect());
-                })
-                .then(function() {
-                    expect(p.available).to.be.equal(1);
-                    expect(p.immediate).to.be.equal(0);
-                    return p.connect();
-                })
-                .then(function() {
-                    expect(p.available).to.be.equal(0);
-                    expect(p.immediate).to.be.equal(0);
-                });
-        });
-
-    });
-
-    describe('max size', function() {
-
-        before(function () {
-            connector.define('max', 'disconnect', {}, function (config) {
-                var factory = {};
-                factory.disconnect = function () {
-                };
-                return factory;
-            });
-        });
-
-        after(function () {
-            connector.remove('max');
-        });
-
-        it('within max', function() {
-            var p = Pool('max', {}, { poolMax: 2 });
-            return p.connect()
-                .then(function() {
-                    expect(p.available).to.be.equal(1);
-                    return p.connect();
-                })
-                .then(function() {
-                    expect(p.available).to.be.equal(0);
-                });
-        });
-
-        it('overflow max', function() {
-            var p = Pool('max', {}, { poolMax: 1 });
-            return p.connect()
-                .then(function() {
-                    expect(p.available).to.be.equal(0);
-                    return p.connect();
-                })
-                .catch(function(e) {
-                    expect(e).to.be.instanceof(Pool.error.limit);
-                });
-        });
-
-    });
-
-    describe('min and pool timeout', function() {
-        before(function () {
-            connector.define('min', 'disconnect', {}, function (config) {
-                var factory = {};
-                factory.disconnect = function () {
-                };
-                return factory;
-            });
-        });
-
-        after(function () {
-            connector.remove('min');
-        });
-
-        it('initialize to min', function() {
-            var p = Pool('min', {}, { poolMin: 2, poolMax: 4 });
-            return Promise.delay(5)
-                .then(function() {
-                    expect(p.available).to.be.equal(4);
-                    expect(p.immediate).to.be.equal(2);
-                });
-        });
-
-        it('idle timeout', function() {
-            var p = Pool('min', {}, { poolMin: 1, poolMax: 4, poolIncrement: 3, poolTimeout: .05 });
-            return Promise.delay(5)
-                .then(function() {
-                    expect(p.available).to.be.equal(4);
-                    expect(p.immediate).to.be.equal(3);
-                    return Promise.delay(100);
-                })
-                .then(function() {
-                    expect(p.available).to.be.equal(4);
-                    expect(p.immediate).to.be.equal(1);
-                });
-        });
-    });
 
     describe('terminate', function() {
         before(function () {

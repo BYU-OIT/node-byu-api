@@ -1,11 +1,13 @@
 "use strict";
-const CustomError         = require('custom-error-instance');
-const definition          = require('./definition');
-const file                = require('../util/file');
-const fs                  = require('fs');
-const is                  = require('../util/is');
-const path                = require('path');
-const schemata            = require('object-schemata');
+const CustomError       = require('custom-error-instance');
+const definition        = require('./definition');
+const file              = require('../util/file');
+const fs                = require('fs');
+const is                = require('../util/is');
+const log               = require('../log/log');
+const logDetails        = require('../log/index').details;
+const path              = require('path');
+const schemata          = require('object-schemata');
 
 var Err = CustomError('ResourceError');
 Err.dne = CustomError(Err, { code: 'EDNE' });
@@ -22,10 +24,14 @@ function Resource(configuration) {
     var src = config.src;
 
     function resourceAllowed(resourceName) {
-        var limit = config.srcLimit;
+        var limit = config.srcFilter;
         if (!limit) return true;
         return limit.indexOf(resourceName) !== -1;
     }
+
+    // set up logging
+    if (config.srcLogConsole !== 'none') log({ filter: src, path: '', details: config.srcLogConsole });
+    if (config.srcLogFile) log({ filter: src, path: config.srcLogFile, details: 'verbose' });
 
     // validate that the src directory is a directory
     return file.stat(src)
@@ -143,8 +149,8 @@ Resource.schema = schemata({
         defaultValue: false,
         transform: (value) => !!value
     },
-    srcLimit: {
-        help: 'The src must be an array of strings.',
+    srcFilter: {
+        help: 'The src filter must be an array of strings.',
         validate: function(value, is) {
             var i;
             if (!Array.isArray(value)) return false;
@@ -153,6 +159,14 @@ Resource.schema = schemata({
             }
             return true;
         }
+    },
+    srcLogConsole: {
+        help: 'The src log console value must be one of: ' + logDetails.join(', '),
+        validate: (v) => logDetails.indexOf(v) !== -1
+    },
+    srcLogFile: {
+        help: 'The src log file value must be a string.',
+        validate: is.string
     },
     srcIndex: {
         help: 'The src must be a string.',

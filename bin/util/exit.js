@@ -2,6 +2,7 @@
 var defineGetter    = require('./define-getter');
 var Promise         = require('bluebird-settle');
 
+var exiting = false;
 var store = [];
 var terminal = false;
 
@@ -34,8 +35,10 @@ exports.unlisten = function(callback) {
 
 //overwrite the process.exit function
 process.exit = (function(exit) {
+    if (exiting) return;
+    exiting = true;
     return function(code) {
-        console.log('Process exit invoked');
+        //console.log('Process exit invoked');
         var promises = [];
         store.forEach(function(callback) {
             var result = callback();
@@ -50,10 +53,11 @@ process.exit = (function(exit) {
 })(process.exit);
 
 process.on('SIGINT', function() {
-    console.log('SIGINT signal received');
+    //console.log('SIGINT signal received');
     process.exit(0);
 });
 
 process.on('exit', function() {
-    console.log('Process exit inevitable');
+    //console.log('Process exit inevitable');
+    process.exit(0);
 });

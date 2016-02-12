@@ -16,12 +16,21 @@ Err.revoked = CustomError(Err, { code: 'ERVOK', message: 'Connection unavailable
 
 module.exports = Pool;
 
-function Pool(connect, configuration) {
+/**
+ * Set up a connect function to use pooling.
+ * @param {function} connect The original connect function.
+ * @param {object} configuration The pool configuration.
+ * @param {object} [connConfig] The connection configuration to use for all connections.
+ * @returns {{ available: number, immediate: number, poolSize: number, terminate: function }, function, poolConnect}
+ * @constructor
+ */
+function Pool(connect, configuration, connConfig) {
     var available;
     var growing = 0;
     var poolConfig = Pool.schema.normalize(configuration || {});
     var pending;
     var terminate;
+    var terminatePromise;
     var unavailable = [];
 
     //manage available connections and idle timeout
@@ -61,41 +70,59 @@ function Pool(connect, configuration) {
      */
     getter('poolSize', () => available.length + growing + unavailable.length);
 
-    exit.listen(function() {
-        terminate = [];
-        return new Promise(function(resolve, reject) {
-            var conn;
+    /**
+     * Terminate the connection pool.
+     * @param {boolean} [hard=false] Set to true to terminate in use connections immediately.
+     * @returns {Promise}
+     */
+    poolConnect.terminate = function(hard) {
+        if (!terminatePromise) {
+            terminate = [];
+            terminatePromise = new Promise(function (resolve, reject) {
+                var conn;
 
-            function settle() {
-                return Promise.settle(terminate)
-                    .then(function(results) {
-                        var errors = results.filter((r) => r.isRejected());
-                        if (errors.length > 0) {
-                            reject(new Err('One or more connections could not disconnect:\n\t' + e.join('\n\t')));
-                        } else {
-                            resolve();
-                        }
-                    });
-            }
+                function settle() {
+                    var promises = terminate.filter(promiseLike);
+                    return Promise.settle(promises)
+                        .then(function (results) {
+                            var errors = results.filter((r) => r.isRejected());
+                            if (errors.length > 0) {
+                                reject(new Err('One or more connections could not disconnect:\n\t' + e.join('\n\t')));
+                            } else {
+                                resolve();
+                            }
+                        });
+                }
 
-            // inform all pending of failure to connect
-            while (pending.length > 0) pending.get().reject(Err.terminated);
+                // inform all pending of failure to connect
+                while (pending.length > 0) pending.get().reject(Err.terminated);
 
-            // terminate available connections first
-            while (conn = available.get()) terminate.push(conn.manager.disconnect());
+                // terminate available connections first
+                while (conn = available.get()) terminate.push(conn.manager.disconnect());
 
-            //set a timeout that will do hard disconnects
-            if (unavailable.length > 0) {
-                setTimeout(function () {
-                    var conn;
-                    while (conn = unavailable.shift()) terminate.push(conn.manager.disconnect());
+                // if hard is set to true then hard terminate in use connections
+                if (hard) while (conn = unavailable.shift()) terminate.push(conn.manager.disconnect());
+
+                //set a timeout that will do hard disconnects
+                if (unavailable.length > 0) {
+                    setTimeout(function () {
+                        var conn;
+                        while (conn = unavailable.shift()) terminate.push(conn.manager.disconnect());
+                        settle();
+                    }, poolConfig.terminateGrace * 1000);
+                } else {
                     settle();
-                }, poolConfig.terminateGrace * 1000);
-            } else {
-                settle();
-            }
-        });
-    });
+                }
+            });
+        }
+        return terminatePromise;
+    };
+
+    // if the process begins to exit then close all open database connections
+    exit.listen(poolConnect.terminate);
+
+    // initialize to the pool min size
+    grow(poolConfig.poolMin);
 
 
 
@@ -103,13 +130,50 @@ function Pool(connect, configuration) {
     function getter(name, callback) {
         Object.defineProperty(poolConnect, name, {
             enumerable: true,
-            get: callback
+            get: callback,
+            set: function() {}
         });
     }
 
-    function lease() {
-        var conn = available.get();
+    function grow(quantity) {
+        var i;
+        var promise;
+        var promises = [];
+
+        //add to the growth difference
+        growing += quantity;
+
+        //add connections
+        for (i = 0; i < quantity; i++) {
+            promise = promiseWrap(() => connect(connConfig))
+                .then(function(conn) {
+                    growing--;
+
+                    if (terminate) {
+                        terminate.push(conn.manager.disconnect());
+
+                    } else {
+                        if (pending.length === 0) {
+                            available.add(conn);
+                        } else {
+                            pending.get().resolve(lease(conn));
+                        }
+                    }
+                })
+                .catch(function(err) {
+                    if (pending.length > 0) pending.get().reject(err);
+                });
+            promises.push(promise);
+        }
+
+        return Promise.settle(promises);
+    }
+
+    function lease(conn) {
         var disconnect;
+
+        // if a connection wasn't supplied then get the next available connection
+        if (!conn) conn = available.get();
 
         // add connection to unavailable
         unavailable.push(conn);
@@ -117,8 +181,11 @@ function Pool(connect, configuration) {
         // store the old disconnect and overwrite it
         disconnect = conn.manager.disconnect;
         conn.manager.disconnect = function() {
+            var index;
             if (!terminate) {
                 conn.manager.disconnect = disconnect;
+                index = unavailable.indexOf(conn);
+                unavailable.splice(index, 1);
                 available.add(conn);
                 if (pending.length > 0) pending.get().resolve(lease());
             } else {
@@ -129,7 +196,11 @@ function Pool(connect, configuration) {
         return conn;
     }
 
-    function poolConnect(connConfig) {
+    /**
+     * Get a connection from the pool.
+     * @returns {Promise}
+     */
+    function poolConnect() {
         var diff;
         var i;
         var poolSize = poolConnect.poolSize;
@@ -152,33 +223,15 @@ function Pool(connect, configuration) {
         // if there are more items pending then connections being made (growing the pool) then grow some more
         if (pending.length > growing) {
 
-            //determine the new pool size
+            // determine the new pool size
             size = poolSize + poolConfig.poolIncrement;
             if (size > poolConfig.poolMax) size = poolConfig.poolMax;
 
-            //add to the growth difference
+            // determine the difference
             diff = size - poolSize;
-            growing += diff;
 
-            //add connections
-            for (i = 0; i < diff; i++) {
-                promiseWrap(() => connect(connConfig))
-                    .then(function(conn) {
-                        growing--;
-
-                        if (terminate) {
-                            terminate.push(conn.manager.disconnect());
-
-                        } else {
-                            available.add(conn);
-                            if (pending.length > 0) pending.get().resolve(lease());
-                        }
-                    })
-                    .catch(function(err) {
-                        if (pending.length > 0) pending.get().reject(err);
-                    });
-            }
-
+            // grow the pool
+            grow(diff);
         }
 
         return deferred.promise;
@@ -194,7 +247,9 @@ Pool.schema = schemata({
         message: 'Connect timeout:',
         help: 'This value must be a non-negative number.',
         defaultValue: 30,
-        transform: parseInt,
+        transform: function(value) {
+            return Math.round(parseFloat(value) * 1000) / 1000;
+        },
         validate: is.nonNegativeNumber
     },
     poolIncrement: {
@@ -245,6 +300,10 @@ Object.defineProperty(Pool, 'error', {
     value: Err,
     writable: false
 });
+
+function promiseLike(value) {
+    return value && typeof value.then === 'function';
+}
 
 function round(value) {
     return Math.round(parseFloat(value));

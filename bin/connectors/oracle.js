@@ -48,7 +48,7 @@ Connector.define({
     }
 });
 
-function OracleConnector(config) {
+function OracleConnector(id, config) {
     return new Promise(function(resolve, reject) {
         oracleDb.getConnection(config, function(err, conn) {
             var client;

@@ -42,18 +42,19 @@ describe('database/manager', function() {
         });
 
         it('resolves to an object', function() {
-            return expect(Manager(config).connections([])).to.eventually.be.an('object');
+            return expect(Manager(config).connections('', [])).to.eventually.be.an('object');
         });
 
         it('resolves to an object with done function', function() {
-            return Manager(config).connections([])
+            return Manager(config).connections('', [])
                 .then(function(result) {
                     expect(result.done).to.be.a('function');
                 });
         });
 
         it('resolves to an object with connections map', function() {
-            return Manager(config).connections(['foo'])
+            return Manager(config)
+                .connections('', ['foo'])
                 .then(function(result) {
                     expect(result.connections).to.be.an('object');
                     expect(result.connections.foo.run).to.be.a('function');
@@ -81,15 +82,19 @@ describe('database/manager', function() {
     describe('#test', function() {
 
         it('is a function', function() {
-            expect(Manager(config).test).to.be.a('function');
+            expect(Manager.test).to.be.a('function');
         });
 
         it('returns a promise', function() {
-            expect(Manager(config).test('foo')).to.be.instanceof(Promise);
+            expect(Manager.test()).to.be.instanceof(Promise);
         });
 
-        it('resolves to true', function() {
-            expect(Manager(config).test('foo')).to.eventually.be.equal(true);
+        it('resolves to true when passed', function() {
+            return expect(Manager.test('bar', { user: 'foo' })).to.eventually.be.equal(true);
+        });
+
+        it('resolves to Error when failed', function() {
+            return expect(Manager.test('bar', {})).to.eventually.be.instanceof(Error);
         });
 
     });
