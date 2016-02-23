@@ -85,28 +85,33 @@ Command.define('request',
     function(configuration) {
         var promises = [];
 
+        // start logging
+        Logger.cli(configuration);
+
+        // join array of objects for cookies, headers, and query into a single object
         if (configuration.cookie) configuration.cookie = Object.assign.apply(Object, configuration.cookie);
         if (configuration.header) configuration.header = Object.assign.apply(Object, configuration.header);
         if (configuration.query) configuration.query = Object.assign.apply(Object, configuration.query);
 
+        // load the database manager and resources
         promises.push(Manager.load(configuration));
         promises.push(ResourceLoader(configuration));
-        Logger.cli(configuration);
 
+        // create a request handler and call it
         return Promise.all(promises)
             .then(function(results) {
-                var handler = Handler({
-                    database: results[0],
-                    resource: results[1]
-                });
-                return handler(configuration);
+                var interfaces = { manager: results[0], resource: results[1] };
+                return Handler(interfaces)(configuration);
             });
     },
     {
-        brief: 'Make a single REST request to API',
+        brief: 'Make a single REST request directly to API.',
         defaultOption: 'url',
         synopsis: [
             '[OPTIONS]...'
+        ],
+        sections: [
+            Logger.helpSection()
         ],
         groups: {
             database: 'Database File Options',

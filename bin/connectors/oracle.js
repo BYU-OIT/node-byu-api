@@ -48,7 +48,7 @@ Connector.define({
     }
 });
 
-function OracleConnector(id, config) {
+function OracleConnector(config) {
     return new Promise(function(resolve, reject) {
         oracleDb.getConnection(config, function(err, conn) {
             var client;
@@ -65,7 +65,9 @@ function OracleConnector(id, config) {
 
             manager = {
                 disconnect: Promise.promisify(conn.release, {context: oracleDb}),
-                query: () => client.execute.apply(oracleDb, arguments)
+                preRequest: () => void 0,
+                postRequest: (success) => success ? client.commit() : client.rollback(),
+                query: (conn, args) => conn.execute.apply(conn, args)
             };
 
             resolve({

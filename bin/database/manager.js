@@ -3,6 +3,7 @@ var Configuration   = require('./configuration');
 var Connector       = require('./connector');
 var CustomError     = require('custom-error-instance');
 var defineGetter    = require('../util/define-getter');
+var defer           = require('../util/defer');
 var Promise         = require('bluebird');
 var promiseWrap     = require('../util/promise-wrap');
 var Pool            = require('./pool');
@@ -17,7 +18,7 @@ module.exports = Manager;
 /**
  *
  * @param {object} configuration A database configuration map or a database configuration object.
- * @returns {{ connections: function, query: function }}
+ * @returns {Manager}
  */
 function Manager(configuration) {
     var dbConfig;
@@ -38,6 +39,7 @@ function Manager(configuration) {
      * resolve with the connections.
      * @param {string} id The request ID
      * @param {string[]} names An array of connections to get.
+     * @returns {Promise} that resolves to an object with a done() function and the connections map.
      */
     factory.connections = function(id, names) {
         if (typeof id !== 'string') return Promise.reject(Err.input('Expected the id to be a string.'));
@@ -52,16 +54,53 @@ function Manager(configuration) {
 
         // build the connection map
         return Promise
-            .map(names, (name) => connect(name, id))
+            .map(names, (name) => connect(name))
             .then(function(connections) {
-                var map = names
-                    .reduce(function(map, key, index) {
-                        map[key] = Object.assign({}, connections[index].client);
-                        return map;
-                    }, {});
+                var map = {};
+
+                names.forEach(function(name, index) {
+                    var conn = connections[index];
+
+                    // set up a race between the persistent connection and a new connection to see who
+                    // is ready to fulfill the query first
+                    var query = function() {
+                        var activePromise = conn.manager.activePromise();
+                        var args = arguments;
+                        var deferred = defer();
+                        var newConnectionPromise = connect(name);
+
+                        activePromise.then(function() {
+                            if (!newConnectionPromise.isPending()) {
+                                conn.manager.query.apply(null, args)
+                                    .then(deferred.resolve, deferred.reject);
+                            }
+                        });
+
+                        newConnectionPromise.then(function(conn) {
+                            if (!activePromise.isPending()) {
+                                conn.manager.query.apply(null, args)
+                                    .then(deferred.resolve, deferred.reject);
+                            }
+                            conn.manager.disconnect();
+                        });
+
+                        return deferred.promise;
+                    };
+
+                    map[name] = Object.assign(query, conn.client);
+
+                });
 
                 return {
-                    done: () => connections.forEach((conn) => conn.manager.disconnect()),
+                    done: function(success) {
+                        var promises = [];
+                        connections.forEach(function(conn) {
+                            var promise = conn.manager.done(success)
+                                .then(() => conn.manager.disconnect());
+                            promises.push(promise);
+                        });
+                        return Promise.all(promises);
+                    },
                     connections: map
                 };
             });
@@ -81,10 +120,10 @@ function Manager(configuration) {
      */
     factory.query = function(name, args) {
         var conn;
-        return connect(name, '')
+        return connect(name)
             .then(function(c) {
                 conn = c;
-                return conn.manager.query(args);
+                return conn.manager.query(c, args);
             })
             .then(function(result) {
                 return result;
@@ -94,9 +133,9 @@ function Manager(configuration) {
             });
     };
 
-    function connect(name, id) {
+    function connect(name) {
         if (!store.hasOwnProperty(name)) throw Err.input('Connection name not defined: ' + name);
-        return store[name].then((fn) => fn(id));
+        return store[name].then((fn) => fn());
     }
 
     // build the map of connector functions to connection names
@@ -112,7 +151,7 @@ function Manager(configuration) {
  * Get a function that will get a connection when called.
  * @param {string} connector The name of the connector to use.
  * @param {object} config The connector configuration to use to connect to the database.
- * @param {boolean} [poolConfig] Set to true to have the connection use pooling.
+ * @param {object} [poolConfig] The pool configuration to use.
  * @returns {Promise} that resolves to a function
  */
 Manager.connect = function(connector, config, poolConfig) {
@@ -126,35 +165,10 @@ Manager.connect = function(connector, config, poolConfig) {
         })
         .then((connect) => poolConfig ? Pool(connect, poolConfig || {}, config) : connect)
         .then(function(connect) {
-            return function(id) {
-                return promiseWrap(() => connect(id, normalizedConfig))
-                    .then(function (conn) {
-                        var disconnect;
-                        var query;
-
-                        // validate that the connection is formatted appropriately
-                        if (!conn.hasOwnProperty('client') || !conn.client || typeof conn.client !== 'object') throw Err.connector('Missing client object.');
-                        if (!conn.hasOwnProperty('manager') || !conn.manager || typeof conn.manager !== 'object') throw Err.connector('Missing manager object.');
-                        if (!conn.manager.hasOwnProperty('disconnect') || typeof conn.manager.disconnect !== 'function') throw Err.connector('Manager disconnect property must be a function.');
-                        if (!conn.manager.hasOwnProperty('query') || typeof conn.manager.query !== 'function') throw Err.connector('Manager query property must be a function.');
-
-                        // wrap disconnect in a promise
-                        disconnect = conn.manager.disconnect;
-                        conn.manager.disconnect = function() {
-                            var args = arguments;
-                            return promiseWrap(() => disconnect.apply(disconnect, args));
-                        };
-
-                        // wrap query in a promise
-                        query = conn.manager.query;
-                        conn.manager.query = function() {
-                            var args = arguments;
-                            return promiseWrap(() => query.apply(query, args));
-                        };
-
-                        return conn;
-                    });
-            }
+            return function() {
+                return promiseWrap(() => connect(normalizedConfig))
+                    .then(connectionTransform);
+            };
         });
 };
 
@@ -178,3 +192,66 @@ Manager.test = function(connector, config) {
         .then(() => true)
         .catch((e) => e);
 };
+
+/**
+ * Take the connection object (from a connected database connection) and transform it for use within the framework
+ * @param conn
+ * @returns {*}
+ */
+function connectionTransform(conn) {
+    var disconnect;
+    var done;
+    var lastPromise;
+    var query;
+
+    // validate that the connection is formatted appropriately
+    if (!conn.hasOwnProperty('client') || !conn.client || typeof conn.client !== 'object') throw Err.connector('Missing client object.');
+    if (!conn.hasOwnProperty('manager') || !conn.manager || typeof conn.manager !== 'object') throw Err.connector('Missing manager object.');
+    if (!conn.manager.hasOwnProperty('disconnect') || typeof conn.manager.disconnect !== 'function') throw Err.connector('Manager disconnect property must be a function.');
+    if (!conn.manager.hasOwnProperty('done') || typeof conn.manager.done !== 'function') throw Err.connector('Manager done property must be a function.');
+    if (!conn.manager.hasOwnProperty('query') || typeof conn.manager.query !== 'function') throw Err.connector('Manager query property must be a function.');
+
+    // wrap client functions in a promise
+    Object.keys(conn.client).forEach(function(key) {
+        var fn = conn.client[key];
+        if (typeof value === 'function') {
+            conn.client[key] = function() {
+                var args = arguments;
+                lastPromise = promiseWrap(() => fn.apply(fn, args));
+                return lastPromise;
+            }
+        }
+    });
+
+    // get the current available promise
+    conn.manager.activePromise = function() {
+        return lastPromise;
+    };
+
+    // wrap disconnect in a promise
+    disconnect = conn.manager.disconnect;
+    conn.manager.disconnect = function() {
+        var args = arguments;
+        return promiseWrap(() => disconnect.apply(disconnect, args));
+    };
+
+    // wrap done in a promise
+    done = conn.manager.done;
+    conn.manager.done = function(success) {
+        return promiseWrap(() => done.call(done, success));
+    };
+
+    // wrap query in a promise
+    query = conn.manager.query;
+    conn.manager.query = function() {
+        var args = arguments;
+        return promiseWrap(() => query.apply(query, args));
+    };
+
+    // add a start function
+    conn.manager.reset = function() {
+        lastPromise = null;
+    };
+
+    return conn;
+}

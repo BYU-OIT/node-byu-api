@@ -1,9 +1,11 @@
 "use strict";
-var CustomError         = require('custom-error-instance');
-var defineGetter        = require('../util/define-getter');
-var is                  = require('../util/is');
-var Promise             = require('bluebird');
-var schemata            = require('object-schemata');
+var CustomError     = require('custom-error-instance');
+var defineGetter    = require('../util/define-getter');
+var is              = require('../util/is');
+var Promise         = require('bluebird');
+var promiseWrap     = require('../util/promise-wrap');
+var schemata        = require('object-schemata');
+var uniqueId        = require('../util/unique-id');
 
 var Err = CustomError('ReqHandleError');
 Err.interface = CustomError(Err, { code: 'EIFCE' });
@@ -12,84 +14,128 @@ Err.s404 = CustomError(Err.s400, { code: 'E404', message: 'Not found' });
 Err.s405 = CustomError(Err.s400, { code: 'E405', message: 'Method not supported' });
 Err.s500 = CustomError(Err, { code: 'E500', message: 'Server error' });
 Err.s501 = CustomError(Err, { code: 'E501', message: 'Not implemented' });
+Err.status = CustomError(Err, { code: 'ESTAT', message: 'Invalid status code.' });
 
-var Metadata = {};
+var httpStatusCodes = [
+    100, 101, 102,
+    200, 201, 202, 203, 204, 205, 206, 207, 208, 226,
+    300, 301, 302, 303, 304, 305, 306, 307, 308,
+    400, 401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 412, 413, 414, 415, 416, 417, 418, 421, 422, 423, 424, 426, 428, 429, 431, 451,
+    500, 501, 502, 503, 504, 505, 506, 507, 508, 510, 511
+];
 
 module.exports = Handler;
 
 function Handler(interfaces) {
-    var database;
+    var manager;
     var resource;
 
     // validate that all needed interfaces are present
     if (!interfaces) throw Err.interface('Invalid interface description.');
-    if (!interfaces.hasOwnProperty('database')) throw Err.interface('Missing required database interface.');
+    if (!interfaces.hasOwnProperty('manager')) throw Err.interface('Missing required database manager interface.');
     if (!interfaces.hasOwnProperty('resource')) throw Err.interface('Missing required resource interface.');
 
-    database = interfaces.database;
+    manager = interfaces.manager;
     resource = interfaces.resources;
 
     return function(configuration) {
-        return new Promise(function(resolve, reject) {
-            try {
-                var config = Handler.schema.normalize(configuration);
-                var match;
-                var o;
-                var params;
-                var resourceDef;
+        try {
+            var config = Handler.schema.normalize(configuration);
+            var dbConnNames;
+            var dbInterface;
+            var defaultCode;
+            var deferred = defer();
+            var id;
+            var match;
+            var o;
+            var params;
+            var resourceDef;
+            var request;
+            var response;
 
-                // separate any query parameters from the url and add them to the query object
-                o = separateQueryFromUrl(config.url);
-                config.url = o.url.replace(/^\/+/, '').replace(/\/+$/, '');
-                config.query = Object.assign({}, o.query, config.query);
+            // separate any query parameters from the url and add them to the query object
+            o = separateQueryFromUrl(config.url);
+            config.url = o.url.replace(/^\/+/, '').replace(/\/+$/, '');
+            config.query = Object.assign({}, o.query, config.query);
 
-                // get the url components
-                match = /^(?:(meta)\/)?([ \S]+?)(?:\/([ \S]+?))?(?:\/([ \S]+?))?(?:\/([ \S]+?))?$/.exec(config.url);
-                if (!match) return reject(Err.s404());
+            // get the url components
+            match = /^(?:(meta)\/)?([ \S]+?)(?:\/([ \S]+?))?(?:\/([ \S]+?))?(?:\/([ \S]+?))?$/.exec(config.url);
+            if (!match) return reject(Err.s404());
 
-                // build initial params object
-                params = {
-                    fieldset: void 0,
-                    meta: !!match[1],
-                    method: config.method,
-                    resource: resource.get(match[2]),
-                    resource_def: null,
-                    resource_id: match[3] ? match[3].split(',') : void 0,
-                    resource_name: match[2],
-                    sub_resources: {},
-                    sub_resources_def: {},
-                    sub_resource_id: match[3] && match[4] ? match[4].split(',') : void 0,
-                    sub_resource_name: match[3] || void 0
-                };
+            // build initial params object
+            params = {
+                fieldset: void 0,
+                meta: !!match[1],
+                method: config.method,
+                resource: resource.get(match[2]),
+                resource_def: null,
+                resource_id: match[3] ? match[3].split(',') : void 0,
+                resource_name: match[2],
+                sub_resources: {},
+                sub_resources_def: {},
+                sub_resource_id: match[3] && match[4] ? match[4].split(',') : void 0,
+                sub_resource_name: match[3] || void 0
+            };
 
-                // if the resource isn't defined or the method isn't supported then reject
-                if (!params.resource) return reject(Err.s404('Resource not found: ' + params.resource_name));
-                if (!params.resource.hasOwnProperty(params.method)) return reject(Err.s405());
+            // if the resource isn't defined or the method isn't supported then reject
+            if (!params.resource) return reject(Err.s404('Resource not found: ' + params.resource_name));
+            if (!params.resource.hasOwnProperty(params.method)) return reject(Err.s405());
 
-                // determine field sets from params and definition file
-                params.fieldset = getFieldSets(params, resource);
+            // determine field sets from params and definition file
+            params.fieldset = getFieldSets(params, resource);
 
-                // build resource definition instance and getter
-                resourceDef = resource.definition(params.resource_name).instance();
-                resourceDef.applyQueryParameters(config.query);
-                defineGetter(params, 'resource_def', () => resourceDef.data);
+            // build resource definition instance and getter
+            resourceDef = resource.definition(params.resource_name).instance();
+            resourceDef.applyQueryParameters(config.query);
+            defineGetter(params, 'resource_def', () => resourceDef.data);
 
-                // define getters for sub-resources
-                Object.keys(params.fieldset).forEach(function (subResourceName) {
-                    var def = resource.definition(params.resource_name).instance();
-                    defineGetter(params.sub_resources, subResourceName, () => resource.get(params.resource_name, subResourceName));
-                    defineGetter(params.sub_resources_def, subResourceName, () => def.data);
+            // define getters for sub-resources
+            Object.keys(params.fieldset).forEach(function (subResourceName) {
+                var def = resource.definition(params.resource_name).instance();
+                defineGetter(params.sub_resources, subResourceName, () => resource.get(params.resource_name, subResourceName));
+                defineGetter(params.sub_resources_def, subResourceName, () => def.data);
+            });
+
+            // get a unique array of database connection names from the definition files
+            dbConnNames = [];
+            getDefinitionDbNames(dbConnNames, params.resource_def);
+            Object.keys(params.sub_resources_def).forEach(function(name) {
+                getDefinitionDbNames(dbConnNames, params.sub_resources_def[name]);
+            });
+
+            // get the database interface
+            id = uniqueId();
+            dbInterface = manager.connections(id, dbConnNames);
+
+            // build the request object
+            request = Object.assign({}, config);
+            delete request.timeout;
+            Object.freeze(request);
+
+            // determine the default status code
+            switch (config.method) {
+                case 'post':    defaultCode = 201; break;
+                case 'delete':  defaultCode = 204; break;
+                default:        defaultCode = 200;
+            }
+
+            // build the response object
+            response = getResponseObject(defaultCode, deferred, config.timeout);
+
+            // call the resource
+            promiseWrap(() => params.resource(dbInterface.connections, params, request, response))
+                .then(response.send)
+                .catch(function(e) {
+                    response.status(500);
+                    response.send('Internal server error.');
                 });
 
-                // TODO: get a database connection map from databases specified in the def metadata
+            // return the deferred promise
+            return deferred.promise;
 
-                // TODO: call the resource
-
-
-            } catch (e) {
-                reject(e);
-            }
-        });
+        } catch (e) {
+            return Promise.reject(e);
+        }
     };
 }
 
@@ -133,6 +179,21 @@ Handler.schema = schemata({
         validate: is.string
     }
 });
+
+/**
+ * Get the names of database connections to use from a definition object.
+ * @param {string[]} store The store to save unique names to.
+ * @param {object} def The definition object.
+ * @returns {string[]}
+ */
+function getDefinitionDbNames(store, def) {
+    if (def && def.metadata && Array.isArray(def.db_names)) {
+        def.db_names.forEach(function(name) {
+            if (store.indexOf(name) === -1) store.push(name);
+        });
+    }
+    return store;
+}
 
 /**
  * Get the names of all field sets to use based on the query and definition file.
@@ -179,6 +240,102 @@ function getFieldSets(params, resource) {
     }
 
     return result.slice(0);
+}
+
+/**
+ * Get a response object that will be sent to the resource handler.
+ * @param defaultCode
+ * @param deferred
+ * @param timeout
+ * @returns {object}
+ */
+function getResponseObject(defaultCode, deferred, timeout) {
+    var data = {
+        body: void 0,
+        code: defaultCode,
+        headers: {}
+    };
+    var factory = {};
+    var timeoutId;
+
+    /**
+     * Mark the request as handled.
+     */
+    factory.end = function() {
+        deferred.resolve(data);
+    };
+
+    /**
+     * Get a set header.
+     * @param {string} key
+     */
+    factory.get = function(key) {
+        return data.headers[key.toLowerCase()];
+    };
+
+    factory.resetTimeout = function() {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(function () {
+            if (q.isPending(deferred.promise)) {
+                factory.status(408);
+                deferred.resolve('Request timeout');
+            }
+        }, timeout);
+    };
+
+    /**
+     * Specify content to send and end the handler.
+     * @param {*} content
+     */
+    factory.send = function(content) {
+        data.body = content;
+        factory.end();
+    };
+
+    /**
+     * Set one or more headers.
+     * @param {string, object} key
+     * @param {string} [value]
+     */
+    factory.set = function(key, value) {
+        if (typeof key === 'object' && key) {
+            Object.keys(key).forEach(function(k) {
+                data.headers[k.toLowerCase()] = key[k];
+            });
+        } else {
+            data.headers[key.toLowerCase()] = value;
+        }
+    };
+
+    /**
+     * Set the status code.
+     * @param {number} code
+     * @returns {number}
+     */
+    factory.status = function(code) {
+        if (arguments.length > 0) {
+            if (httpStatusCodes.indexOf(code) === -1) throw Err.status();
+            data.code = value;
+        }
+        return data.code;
+    };
+
+    /**
+     * Tell the result processor that progress is being made and to reset timeout.
+     */
+    factory.working = function() {
+        if (timeout >= 0) {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(function () {
+                if (q.isPending(deferred.promise)) {
+                    factory.status(408);
+                    factory.send('Request timed out');
+                }
+            }, timeout);
+        }
+    };
+
+    return factory;
 }
 
 /**

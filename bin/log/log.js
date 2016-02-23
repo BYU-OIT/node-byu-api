@@ -5,8 +5,8 @@ var is              = require('../util/is');
 var rollingFile     = require('rolling-file');
 var schemata        = require('object-schemata');
 var source          = require('../util/source');
+var noop            = require('../util/noop');
 var path            = require('path');
-
 
 var original_write = {
     stderr: process.stderr.write,
@@ -15,7 +15,10 @@ var original_write = {
 var sorted = false;
 var store = [];
 
+
 module.exports = log;
+
+
 
 /**
  * Specify log output instructions for a specific path.
@@ -158,19 +161,20 @@ log.VERBOSE = defineGetter(log, 'VERBOSE', () => 'verbose');
     };
 });
 
+// when the exit event is triggered, close the write streams
 exit.listen(function() {
     process.stderr.write = noop;
     process.stdout.write = noop;
 });
 
+// if an uncaught error occurs then log it and exit
 process.on('uncaughtException', function(err) {
     console.error(err.stack);
     process.exit(1);
 });
 
+// if a promise has an unhandled rejection then log it and exit
 process.on('unhandledRejection', (reason, p) => {
     console.error("Unhandled Rejection at: Promise ", p, " reason: ", reason);
     process.exit(1);
 });
-
-function noop() {}

@@ -1,4 +1,5 @@
 "use strict";
+var is              = require('./is');
 var Promise         = require('bluebird');
 
 /**
@@ -10,9 +11,7 @@ module.exports = function (callback) {
     var result;
     try {
         result = callback();
-        return !result || typeof result !== 'object' || typeof result.then !== 'function' ?
-            Promise.resolve(result) :
-            result;
+        return !is.promise(result) ? Promise.resolve(result) : result;
     } catch (e) {
         return Promise.reject(e);
     }

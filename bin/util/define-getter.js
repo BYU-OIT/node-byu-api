@@ -1,4 +1,5 @@
 "use strict";
+var noop            = require('./noop');
 
 module.exports = function (object, name, callback) {
     Object.defineProperty(object, name, {
@@ -8,5 +9,3 @@ module.exports = function (object, name, callback) {
         set: noop
     });
 };
-
-function noop() {};

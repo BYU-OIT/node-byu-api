@@ -142,15 +142,20 @@ describe('database/pool', function() {
 
         it('overflow max', function() {
             var p = Pool(connect, { poolMax: 1 });
+            var released = false;
             return p()
-                .then(function() {
+                .then(function(conn) {
                     expect(p.available).to.be.equal(0);
+                    Promise.delay(100).then(function() {
+                        released = true;
+                        conn.manager.disconnect();
+                    });
                     return p();
                 })
-                .catch(function(e) {
-                    expect(e).to.be.instanceof(Pool.error.limit);
-                })
-                .then(() => p.terminate(true));
+                .then(function() {
+                    expect(released).to.be.equal(true);
+                    return p.terminate(true);
+                });
         });
 
     });

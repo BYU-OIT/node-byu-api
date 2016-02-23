@@ -33,3 +33,7 @@ is.positiveNumber = function(value) {
     value = parseInt(value);
     return is.number(value) && value > 0;
 };
+
+is.promise = function(value) {
+    return value && typeof value !== 'object' && typeof value.then === 'function';
+};

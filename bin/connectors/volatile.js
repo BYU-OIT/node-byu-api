@@ -3,6 +3,7 @@
 
 var Connector           = require('../database/connector');
 var is                  = require('../util/is');
+var noop                = require('../util/noop');
 
 var allStores = {};
 
@@ -13,13 +14,10 @@ Connector.define({
     options: {}                                     // configuration options specific to this connector
 });
 
-function connect(id, config) {
+function connect(config) {
     var client;
     var manager;
-    var store;
-
-    if (!allStores.hasOwnProperty(id)) allStores[id] = {};
-    store = allStores[id];
+    var store;;
 
     client = {
         del: (key) => delete store[key],
@@ -31,11 +29,10 @@ function connect(id, config) {
     };
 
     manager = {
-        disconnect: () => {
-            store = void 0;
-            delete allStores[id]
-        },
-        query: () => void 0         // this connector is tied to the id, so query cannot be used and returns undefined
+        disconnect: () => store = void 0,
+        preRequest: () => store = {},
+        postRequest: () => store = void 0,
+        query: (key) => client.get(key)
     };
 
     return {

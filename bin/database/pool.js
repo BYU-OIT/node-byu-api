@@ -9,7 +9,6 @@ var schemata            = require('object-schemata');
 var timeoutQueue        = require('../util/timeout-queue');
 
 var Err = CustomError('ConnectionPoolError');
-Err.limit = CustomError(Err, { code: 'ELIMIT', message: 'Database connection pool exhausted.' });
 Err.terminated = CustomError(Err, { code: 'ETERM', message: 'The database connection pool has been terminated.' });
 Err.timeout = CustomError(Err, { code: 'ETIME', message: 'Get database connection timed out.' });
 Err.revoked = CustomError(Err, { code: 'ERVOK', message: 'Connection unavailable' });
@@ -183,6 +182,7 @@ function Pool(connect, configuration, connConfig) {
         conn.manager.disconnect = function() {
             var index;
             if (!terminate) {
+                conn.manager.reset();
                 conn.manager.disconnect = disconnect;
                 index = unavailable.indexOf(conn);
                 unavailable.splice(index, 1);
@@ -204,6 +204,7 @@ function Pool(connect, configuration, connConfig) {
         var diff;
         var i;
         var poolSize = poolConnect.poolSize;
+        var poolLimitReached;
         var deferred;
         var size;
 
@@ -213,15 +214,15 @@ function Pool(connect, configuration, connConfig) {
         // if an idle connection is available then return it
         if (available.length > 0) return Promise.resolve(lease());
 
-        // if this request will overflow the max pool size then throw an error
-        if (poolSize - growing + pending.length >= poolConfig.poolMax) return Promise.reject(new Err.limit());
-
         // if a connection is about to be available then add callback to pending
         deferred = defer();
         pending.add(deferred);
 
+        // determine if the max pool size has been reached
+        poolLimitReached = poolSize - growing + pending.length > poolConfig.poolMax;
+
         // if there are more items pending then connections being made (growing the pool) then grow some more
-        if (pending.length > growing) {
+        if (!poolLimitReached && pending.length > growing) {
 
             // determine the new pool size
             size = poolSize + poolConfig.poolIncrement;

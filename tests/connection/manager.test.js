@@ -38,7 +38,7 @@ describe('database/manager', function() {
         });
 
         it('returns a promise', function() {
-            expect(Manager(config).connections([])).to.be.instanceof(Promise);
+            expect(Manager(config).connections('', [])).to.be.instanceof(Promise);
         });
 
         it('resolves to an object', function() {
@@ -56,7 +56,7 @@ describe('database/manager', function() {
             return Manager(config)
                 .connections('', ['foo'])
                 .then(function(result) {
-                    expect(result.connections).to.be.an('object');
+                    expect(result.connections).to.be.a('function');
                     expect(result.connections.foo.run).to.be.a('function');
                 });
         });

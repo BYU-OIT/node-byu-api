@@ -4,6 +4,8 @@ var log             = require('./log');
 var path            = require('path');
 
 var cliRun = false;
+var details = ['none', 'minimal', 'developer', 'verbose'];
+var descriptionHelp = 'See the section ' + chalk.italic('Log Options Explanation') + ' for more details.';
 
 /**
  * Configure logging for "all", "framework", and custom directives. Logging for resources will
@@ -17,78 +19,109 @@ exports.cli = function(config) {
     if (cliRun) return;
     cliRun = true;
 
-    if (config.logConsoleAll !== 'none') {
-        log({ detail: config.logConsoleAll, filter: '/', output: '', type: 'both' });
-    }
+    // set up logging for error, framework, and profile
+    exports.processOption(config.logError.detail, config.logError.location, log.STDERR, '/');
+    exports.processOption(config.logFramework.detail, config.logFramework.location, log.BOTH, '/');
+    exports.processOption(config.logProfile.detail, config.logProfile.location, log.BOTH, '/');
+};
 
-    if (config.logConsoleFramework !== 'none') {
-        filter = path.resolve(__dirname, '../../');
-        log({ detail: config.logConsoleAll, filter: filter, output: '', type: 'both' });
+/**
+ * Build a command line option object.
+ * @params {string} description A description to prefix the extra help for the option.
+ * @returns {{type: String, description: string, defaultValue: string, transform: function, validate: function, group: string}}
+ */
+exports.buildOption = function(description) {
+    return {
+        type: String,
+        description: description + descriptionHelp,
+        defaultValue: ':developer',
+        transform: transform,
+        validate: validate,
+        group: 'log'
     }
+};
 
-    if (config.logFileAll) {
-        log({ detail: 'verbose', filter: '/', output: config.logFileAll, type: 'both' });
+exports.details = function() {
+    return details.slice(0);
+};
+
+exports.helpSection = function() {
+    return {
+        title: 'Log Options Explanation',
+        body: 'For each log option you can specify where to log output as well as at what level of detail. ' +
+        'This is done by separating the two values by a colon (:). The string before the colon (:) represents '
+        + chalk.bold('where') + ' to output logs and the string after the colon (:) specifies the '
+        + chalk.bold('level of detail') + '. For example: ' + chalk.italic('--log-framework [LOCATION]:[DETAIL]') + '\n\n' +
+        chalk.bold('Where:') + ' If the where is an empty string it will log to the console, otherwise it will ' +
+        'interpret the string as a file system path and save to the location specified.\n\n' +
+        chalk.bold('Level of Detail:') + ' This value can be one of: "' + details.join('", "') + '".',
+        beforeOptions: false
     }
+};
 
-    if (config.logFileFramework) {
-        filter = path.resolve(__dirname, '../../');
-        log({ detail: 'verbose', filter: filter, output: config.logFileFramework, type: 'both' });
+// define the command line options
+exports.options = {
+    logError: {
+        type: String,
+        description: 'Errors are logged along side non-errors for each log type. Additionally just errors ' +
+            'can also be logged to a second specific location. ' + descriptionHelp,
+        defaultValue: ':none',
+        transform: transform,
+        validate: validate,
+        group: 'log'
+    },
+    logFramework: {
+        type: String,
+        description: 'For framework logs. ' + descriptionHelp,
+        defaultValue: ':minimal',
+        transform: transform,
+        validate: validate,
+        group: 'log'
+    },
+    logProfile: {
+        type: String,
+        description: 'For profile logs. ' + descriptionHelp,
+        defaultValue: ':minimal',
+        transform: transform,
+        validate: validate,
+        group: 'log'
+    },
+    logResource: {
+        type: String,
+        description: 'For resource logs. ' + descriptionHelp,
+        defaultValue: ':developer',
+        transform: transform,
+        validate: validate,
+        group: 'log'
     }
+};
 
-    if (config.log) {
-        config.log.forEach(function(config) {
-            log(config);
+/**
+ * Process an option and tell the logger how to log it.
+ * @param {string} detail The level of detail to acquire.
+ * @param {string} output Where to put the output.
+ * @param {string} type The type of output: stdout, stderr, both
+ * @param {string} filter A file path to match before logging.
+ */
+exports.processOption = function(detail, output, type, filter) {
+    if (detail !== 'none') {
+        log({
+            detail: detail,
+            filter: filter,
+            output: output,
+            type: type
         });
     }
 };
 
-exports.details = ['none', 'minimal', 'developer', 'verbose'];
 
-exports.options = {
-    log: {
-        type: Object,
-        description: 'A log output directive with specific instructions. This should be formatted as JSON and takes ' +
-        'the following pattern: { "detail": "developer", "filter": "/", "output": "", "type: "both" }.\n\nThe ' +
-        chalk.bold('detail') + ' property can be one of "minimal", "developer", or "verbose".\n\nThe ' + chalk.bold('filter') +
-        ' property is used to match the file paths of what is being logged. Only file paths that fall within this path ' +
-        'will output with these log instructions.\n\nThe ' + chalk.bold('output') + ' property specifies where logs should ' +
-        'be output. Specifying a file path will write logs to a file or leaving this as a blank string will output the ' +
-        'log to the console.\n\nThe ' + chalk.bold('type') + ' property can be one of "stderr", "stdout", or "both".',
-        defaultValue: {
-            detail: 'developer',
-            filter: '/',
-            output: '',
-            type: 'both'
-        },
-        validate: (v) => log.schema.validate(v),
-        transform: (v) => log.schema.normalize(v),
-        multiple: true,
-        group: 'log'
-    },
-    logConsoleAll: {
-        type: String,
-        description: 'The level of details to log all output with. The value must be one of: ' + exports.details.join(', '),
-        defaultValue: 'developer',
-        validate: (v) => exports.details.indexOf(v) !== -1,
-        group: 'log'
-    },
-    logConsoleFramework: {
-        type: String,
-        description: 'The level of details to log framework output with. The value must be one of: ' + exports.details.join(', '),
-        defaultValue: 'none',
-        validate: (v) => exports.details.indexOf(v) !== -1,
-        group: 'log'
-    },
-    logFileAll: {
-        type: String,
-        description: 'The file path to log all logs to. Use an empty string to not log to a file.',
-        defaultValue: '',
-        group: 'log'
-    },
-    logFileFramework: {
-        type: String,
-        description: 'The file path to log framework logs to. Use an empty string to not log to a file.',
-        defaultValue: '',
-        group: 'log'
-    }
-};
+function transform(value) {
+    var ar = value.split(':');
+    return { location: ar[0], detail: ar[1] || 'developer' };
+}
+
+function validate(value) {
+    var ar = value.split(':');
+    var detail = ar[1] || 'developer';
+    return details.indexOf(detail) !== -1;
+}

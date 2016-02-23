@@ -22,7 +22,7 @@ module.exports = Configuration;
 /**
  * Create a connection factory.
  * @params {object} A connection file configuration.
- * @returns {object}
+ * @returns {{ changePassword: function, get: function, list: function, load: function, remove: function, save: function, set: function }}
  */
 function Configuration(configuration) {
     var config = Configuration.schema.normalize(configuration || {});

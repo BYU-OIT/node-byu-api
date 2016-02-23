@@ -30,6 +30,9 @@ exports.configuration = function(name, promises) {
                     connected = false;
                     if (promises) return Promise.resolve();
                 },
+                done: function() {
+                    return promises ? Promise.resolve() : void 0;
+                },
                 query: function() {
                     return promises ? Promise.resolve('Ran query') : 'Ran query';
                 }

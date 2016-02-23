@@ -1,5 +1,5 @@
 "use strict";
-var details         = require('../log/index').details;
+var Logger          = require('../log/index');
 var path            = require('path');
 
 exports.options = {
@@ -9,37 +9,12 @@ exports.options = {
         defaultValue: 'def.json',
         group: 'resource'
     },
-    logConsoleResource: {
-        type: String,
-        description: 'The level of details to log resource output with. The value must be one of: ' + details.join(', '),
-        defaultValue: 'none',
-        validate: (v) => details.indexOf(v) !== -1,
-        group: 'log'
-    },
-    logFileResource: {
-        type: String,
-        description: 'The file path to log resource logs to. Use an empty string to not log to a file.',
-        defaultValue: '',
-        group: 'log'
-    },
+    logResource: Logger.buildOption('For resource logs,'),
     src: {
         alias: 's',
         type: String,
-        description: 'The directory that has the code to handle the request.',
+        description: 'The directory that defines the top-level resource that has the code to handle the requests.',
         defaultValue: './',
-        group: 'resource'
-    },
-    srcErrorIgnore: {
-        type: Boolean,
-        description: 'If a syntax error is encountered on a resource then it will throw an error unless this option ' +
-        'is set. If this option is set then the resource will simply not be registered without throwing an error.',
-        group: 'resource'
-    },
-    srcFilter: {
-        type: String,
-        description: 'The resource name to limit loaded resources to. The greatest benefit of this option is to ' +
-        'reduce the initial startup time of the application.',
-        multiple: true,
         group: 'resource'
     },
     srcIndex: {
