@@ -1,5 +1,5 @@
 "use strict";
-var Logger          = require('../log/index');
+var LogCli          = require('../log/index');
 var path            = require('path');
 
 exports.options = {
@@ -9,7 +9,7 @@ exports.options = {
         defaultValue: 'def.json',
         group: 'resource'
     },
-    logResource: Logger.buildOption('For resource logs,'),
+    logResource: LogCli.buildOption('For resource logs,'),
     src: {
         alias: 's',
         type: String,

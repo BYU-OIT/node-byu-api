@@ -1,12 +1,12 @@
 "use strict";
-var chalk           = require('chalk');
-var Command         = require('command-line-callback');
-var Database        = require('../database/index');
-var Handler         = require('./handler');
-var Logger          = require('../log/index');
-var Manager         = require('../database/manager');
-var Resource        = require('../resource/index');
-var ResourceLoader  = require('../resource/loader');
+const chalk             = require('chalk');
+const Command           = require('command-line-callback');
+const Database          = require('../database/index');
+const Handler           = require('./handler');
+const LogCli            = require('../log/index');
+const Manager           = require('../database/manager');
+const Resource          = require('../resource/index');
+const ResourceLoader    = require('../resource/loader');
 
 exports.options = {
     body: {
@@ -86,7 +86,7 @@ Command.define('request',
         var promises = [];
 
         // start logging
-        Logger.cli(configuration);
+        LogCli.cli(configuration);
 
         // join array of objects for cookies, headers, and query into a single object
         if (configuration.cookie) configuration.cookie = Object.assign.apply(Object, configuration.cookie);
@@ -111,7 +111,7 @@ Command.define('request',
             '[OPTIONS]...'
         ],
         sections: [
-            Logger.helpSection()
+            LogCli.helpSection()
         ],
         groups: {
             database: 'Database File Options',
@@ -129,7 +129,7 @@ function isKvArgument(value) {
 }
 
 function options() {
-    var result = Object.assign({}, exports.options, Database.options, Resource.options, Logger.options);
+    var result = Object.assign({}, exports.options, Database.options, Resource.options, LogCli.options);
     result.dbFile.hidden = false;
     result.dbFile.required = false;
     return result;

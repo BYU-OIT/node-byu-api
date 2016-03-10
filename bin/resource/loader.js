@@ -5,8 +5,7 @@ const file              = require('../util/file');
 const fs                = require('fs');
 const is                = require('../util/is');
 const log               = require('../log/log');
-const Logger            = require('../log/index');
-const logDetails        = require('../log/index').details();
+const LogCli            = require('../log/index');
 const path              = require('path');
 const schemata          = require('object-schemata');
 
@@ -25,7 +24,7 @@ function Resource(configuration) {
     var src = config.src;
 
     // set up logging
-    Logger.processOption(config.logResource.detail, config.logResource.location, log.BOTH, src);
+    LogCli.processOption(config.logResource.detail, config.logResource.location, log.BOTH, src);
 
     // validate that the src directory is a directory
     return file.stat(src)

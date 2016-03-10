@@ -1,14 +1,14 @@
 "use strict";
-var defineGetter    = require('../util/define-getter');
-var exit            = require('../util/exit');
-var is              = require('../util/is');
-var rollingFile     = require('rolling-file');
-var schemata        = require('object-schemata');
-var source          = require('../util/source');
-var noop            = require('../util/noop');
-var path            = require('path');
+const defineGetter  = require('../util/define-getter');
+const exit          = require('../util/exit');
+const is            = require('../util/is');
+const rollingFile   = require('rolling-file');
+const schemata      = require('object-schemata');
+const source        = require('../util/source');
+const noop          = require('../util/noop');
+const path          = require('path');
 
-var original_write = {
+const original_write = {
     stderr: process.stderr.write,
     stdout: process.stdout.write
 };
@@ -29,7 +29,6 @@ function log(configuration) {
     var dirName;
     var fileName;
     var ext;
-    var s = source(3);
 
     // get the normalized configuration
     config = log.schema.normalize(configuration);
@@ -57,8 +56,8 @@ log.schema = schemata({
     detail: {
         defaultValue: 'verbose',
         description: 'The level of detail to display in the log.',
-        help: 'The detail level must be one of: "minimal", "developer", "verbose".',
-        validate: (v) => ['minimal', 'developer', 'verbose'].indexOf(v) !== -1
+        help: 'The detail level must be one of: "none", "minimal", "developer", "verbose".',
+        validate: (v) => ['none', 'minimal', 'developer', 'verbose'].indexOf(v) !== -1
     },
     filter: {
         required: true,
@@ -72,6 +71,10 @@ log.schema = schemata({
         'string to log to the console.',
         help: 'The filter must be a string.',
         validate: is.string
+    },
+    terminal: {
+        defaultValue: false,
+        description: 'Set to true to make this the last log.'
     },
     type: {
         defaultValue: 'both',
@@ -99,6 +102,7 @@ log.VERBOSE = defineGetter(log, 'VERBOSE', () => 'verbose');
         var developer;
         var logged = false;
         var minimal;
+        var obj = null;
         var s = source(2);
         var verbose;
 
@@ -117,20 +121,35 @@ log.VERBOSE = defineGetter(log, 'VERBOSE', () => 'verbose');
         // build the data object
         data = {
             chunk: chunk,
+            data: void 0,
             pid: process.pid,
             source: s.source,
             time: Date.now(),
             type: type
         };
 
+        // if the chunk is a log-object then the chunk should have data based on the detail level
+        if (/^LogObject {/.test(chunk)) {
+            eval('obj = ' + chunk.substr(10));
+            data.chunk = obj.message + '\n';
+            data.data = obj.data;
+        } else {
+            delete data.data;
+        }
+
         // process each log hook
         store.forEach(function(item) {
             var message;
+            var none;
+
             if (!/^\.\./.test(path.relative(item.filter, s.file))) {
-                if (!logged || item.repeat) {
+                if (!logged) {
 
                     // determine the message to log
                     switch (item.detail) {
+                        case 'none':
+                            none = true;
+                            break;
                         case 'minimal':
                             if (!minimal) minimal = data.chunk;
                             message = minimal;
@@ -147,7 +166,7 @@ log.VERBOSE = defineGetter(log, 'VERBOSE', () => 'verbose');
 
                     if (item.stream) {
                         item.stream.write(message);
-                    } else {
+                    } else if (!none) {
                         if (message) args[0] = message;
                         original_write[type].apply(process[type], args);
                     }

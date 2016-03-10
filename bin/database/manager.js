@@ -204,6 +204,8 @@ function connectionTransform(conn) {
     var lastPromise;
     var query;
 
+    console.log('hello\nhello\nhello\nhello\nhello\nhello\n');
+
     // validate that the connection is formatted appropriately
     if (!conn.hasOwnProperty('client') || !conn.client || typeof conn.client !== 'object') throw Err.connector('Missing client object.');
     if (!conn.hasOwnProperty('manager') || !conn.manager || typeof conn.manager !== 'object') throw Err.connector('Missing manager object.');

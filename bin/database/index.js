@@ -7,6 +7,7 @@ var Connector       = require('./connector');
 var format          = require('cli-format');
 var inquirer        = require('inquirer');
 var Manager         = require('./manager');
+var path            = require('path');
 var Table           = require('cli-table2');
 
 exports.options = {
@@ -26,6 +27,13 @@ exports.options = {
 
 Command.define('database-file',
     function(configuration) {
+        var log = require('../log/log');
+
+        // limit stdout so that just this file can provide it
+        log({ detail: 'none', filter: path.resolve(__dirname, '../'), output: '', type: 'both'});
+        log({ detail: 'minimal', filter: __filename, output: '', type: 'both'});
+
+        // load the manager and start the interface
         return Manager.load(configuration)
             .catch(function(e) {
                 if (e instanceof Configuration.error.noPass) return authInterface(configuration);

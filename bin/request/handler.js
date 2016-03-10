@@ -2,6 +2,7 @@
 var CustomError     = require('custom-error-instance');
 var defineGetter    = require('../util/define-getter');
 var is              = require('../util/is');
+var LogObj          = require('../log/log-object');
 var Promise         = require('bluebird');
 var promiseWrap     = require('../util/promise-wrap');
 var schemata        = require('object-schemata');
@@ -45,18 +46,26 @@ function Handler(interfaces) {
             var dbInterface;
             var defaultCode;
             var deferred = defer();
-            var id;
+            var id = uniqueId();
             var match;
             var o;
             var params;
             var resourceDef;
             var request;
             var response;
+            var start = Date.now();
 
             // separate any query parameters from the url and add them to the query object
             o = separateQueryFromUrl(config.url);
             config.url = o.url.replace(/^\/+/, '').replace(/\/+$/, '');
             config.query = Object.assign({}, o.query, config.query);
+
+            // log request
+            console.log(LogObj('Request [:id] received :method :url', 'request:received', {
+                id: id,
+                method: config.method.toUpperCase(),
+                url: config.url
+            }));
 
             // get the url components
             match = /^(?:(meta)\/)?([ \S]+?)(?:\/([ \S]+?))?(?:\/([ \S]+?))?(?:\/([ \S]+?))?$/.exec(config.url);
@@ -104,7 +113,6 @@ function Handler(interfaces) {
             });
 
             // get the database interface
-            id = uniqueId();
             dbInterface = manager.connections(id, dbConnNames);
 
             // build the request object
@@ -126,9 +134,22 @@ function Handler(interfaces) {
             promiseWrap(() => params.resource(dbInterface.connections, params, request, response))
                 .then(response.send)
                 .catch(function(e) {
+                    console.log(LogObj('Request [:id] error: :stack', 'request:error', {
+                        id: id,
+                        stack: e.stack
+                    }));
                     response.status(500);
                     response.send('Internal server error.');
                 });
+
+            // log finished request
+            deferred.promise.then(function(result) {
+                console.log(LogObj('Request [:id] completed with :status in :duration milliseconds', 'request:completed', {
+                    id: id,
+                    duration: Date.now() - start,
+                    status: result.code
+                }));
+            });
 
             // return the deferred promise
             return deferred.promise;
