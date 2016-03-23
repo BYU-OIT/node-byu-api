@@ -88,13 +88,12 @@ exports.load = function(config) {
                         .then(function(filePaths) {
                             const promises = [];
                             filePaths.forEach(function (filePath) {
-                                const fullFilePath = path.resolve(fullFilePath, filePath);
-                                promises.push(load(fullFilePath));
+                                promises.push(load(path.resolve(fullFilePath, filePath)));
                             });
                             return Promise.all(promises);
                         })
                 }
-            });
+            }, err => console.error(err.stack));
     }
 
     if (!connectorsLoadPromise) {
