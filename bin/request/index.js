@@ -110,14 +110,14 @@ Command.define('request',
         synopsis: [
             '[OPTIONS]...'
         ],
-        sections: [
-            LogCli.helpSection()
-        ],
         groups: {
             database: 'Database File Options',
             request: 'Request Options',
             resource: 'Resource Options',
-            log: 'Log Options'
+            log: {
+                title: 'Log Options',
+                description: LogCli.helpSection()
+            }
         },
         options: options()
     });

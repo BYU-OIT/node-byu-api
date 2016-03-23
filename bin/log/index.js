@@ -46,17 +46,13 @@ exports.details = function() {
 };
 
 exports.helpSection = function() {
-    return {
-        title: 'Log Options Explanation',
-        body: 'For each log option you can specify where to log output as well as at what level of detail. ' +
+    return 'For each log option you can specify where to log output as well as at what level of detail. ' +
         'This is done by separating the two values by a colon (:). The string before the colon (:) represents '
         + chalk.bold('where') + ' to output logs and the string after the colon (:) specifies the '
         + chalk.bold('level of detail') + '. For example: ' + chalk.italic('--log-framework [LOCATION]:[DETAIL]') + '\n\n' +
         chalk.bold('Where:') + ' If the where is an empty string it will log to the console, otherwise it will ' +
         'interpret the string as a file system path and save to the location specified.\n\n' +
-        chalk.bold('Level of Detail:') + ' This value can be one of: "' + details.join('", "') + '".',
-        beforeOptions: false
-    }
+        chalk.bold('Level of Detail:') + ' This value can be one of: "' + details.join('", "') + '".';
 };
 
 // define the command line options
