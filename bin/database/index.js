@@ -63,7 +63,7 @@ Command.define('database-file',
 
 /**
  * Set the terminal to interactive mode to ask for the password.
- * @param dbConn
+ * @param config
  */
 function authInterface(config) {
     return cli
@@ -82,7 +82,7 @@ function authInterface(config) {
 
 /**
  * Set the terminal into interactive mode.
- * @param dbConn The connection file factory.
+ * @param manager The connection manager.
  * @returns {Promise}
  */
 function cfInterface(manager) {
@@ -177,7 +177,7 @@ function cfInterface(manager) {
                         if (!connector.pool) {
                             dbConn.set(name, connector.name, connectorConfig, {});
                         } else {
-                            return poolQuestions({}).then(function(answers) {
+                            return poolQuestions({}).then(function() {
                                 dbConn.set(name, connector.name, connectorConfig, {});
                             });
                         }
