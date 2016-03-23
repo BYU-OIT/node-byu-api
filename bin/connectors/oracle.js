@@ -1,14 +1,40 @@
 "use strict";
-var Connector           = require('../database/connector');
 var is                  = require('../util/is');
 var oracleDb 	        = {};//require('oracledb');
-var Promise             = require('bluebird');
 
-Connector.define({
-    name: 'oracle',                                 // the name of the connector
-    pool: true,                                     // specify that the pool manager will be used with this connector
-    connect: OracleConnector,                       // specify how to get a connection
-    options: {                                      // configuration options specific to this connector
+module.exports = {
+    name: 'oracle',
+    pool: true,
+    connect: function(config) {
+        return new Promise(function(resolve, reject) {
+            oracleDb.getConnection(config, function(err, conn) {
+                var client;
+                var manager;
+
+                if (err) return reject(err);
+
+                client = {
+                    break: Promise.promisify(conn.break, {context: oracleDb}),
+                    commit: Promise.promisify(conn.commit, {context: oracleDb}),
+                    execute: Promise.promisify(conn.execute, {context: oracleDb}),
+                    rollback: Promise.promisify(conn.rollback, {context: oracleDb})
+                };
+
+                manager = {
+                    disconnect: conn => Promise.promisify(conn.release, {context: oracleDb}),
+                    preRequest: conn => void 0,
+                    postRequest: (conn, success) => success ? client.commit() : client.rollback(),
+                    query: (conn, args) => conn.execute.apply(conn, args)
+                };
+
+                resolve({
+                    client: client,
+                    manager: manager
+                });
+            });
+        });
+    },
+    options: {
         user: {
             type: 'input',
             message: 'User:',
@@ -46,38 +72,7 @@ Connector.define({
             validate: is.nonNegativeNumber
         }
     }
-});
-
-function OracleConnector(config) {
-    return new Promise(function(resolve, reject) {
-        oracleDb.getConnection(config, function(err, conn) {
-            var client;
-            var manager;
-
-            if (err) return reject(err);
-
-            client = {
-                break: Promise.promisify(conn.break, {context: oracleDb}),
-                commit: Promise.promisify(conn.commit, {context: oracleDb}),
-                execute: Promise.promisify(conn.execute, {context: oracleDb}),
-                rollback: Promise.promisify(conn.rollback, {context: oracleDb})
-            };
-
-            manager = {
-                disconnect: Promise.promisify(conn.release, {context: oracleDb}),
-                preRequest: () => void 0,
-                postRequest: (success) => success ? client.commit() : client.rollback(),
-                query: (conn, args) => conn.execute.apply(conn, args)
-            };
-
-            resolve({
-                client: client,
-                manager: manager
-            });
-        });
-    });
-}
-
+};
 
 function round(value) {
     return Math.round(parseFloat(value));
