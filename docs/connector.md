@@ -1,4 +1,4 @@
-# Connector
+# Database Connector
 
 A connector is a definition that tells the Node BYU API how to configure and manage database connections. All connectors must reside within the framework at `bin/connectors`. The name of the JavaScript file the defines the connector is irrelevant.
 
