@@ -174,7 +174,7 @@ Manager.connect = function(connector, config, poolConfig) {
 
 Manager.load = function(config) {
     if (!config.dbFile) return Promise.resolve(Manager({}));
-    return Connector.load()
+    return Connector.load(config)
         .then(Configuration(config).load)
         .then((dbConfig) => Manager(dbConfig));
 };

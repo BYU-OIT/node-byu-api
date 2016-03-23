@@ -69,9 +69,11 @@ exports.list = function() {
 
 /**
  * Require all scripts from the connectors directory.
+ * @param {object} config
  * @returns {*}
  */
-exports.load = function() {
+exports.load = function(config) {
+    console.log(config);
     if (!connectorsLoadPromise) connectorsLoadPromise = requireDirectory(path.resolve(__dirname, '../connectors'));
     return connectorsLoadPromise;
 };
@@ -110,10 +112,6 @@ defineSchema = schemata({
         defaultValue: false
     }
 });
-
-function defaultExit() {
-    return Promise.resolve();
-}
 
 /**
  * Require all JavaScript files in the directory specified.
