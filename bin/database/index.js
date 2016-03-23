@@ -11,14 +11,22 @@ var path            = require('path');
 var Table           = require('cli-table2');
 
 exports.options = {
+    connector: {
+        alias: 'r',
+        type: String,
+        description: 'A file path to include as a database connector file.',
+        multiple: true,
+        group: 'database'
+    },
     dbFile: {
+        alias: 'd',
         type: String,
         description: 'The path to the database file.',
-        hidden: true,
         required: true,
         group: 'database'
     },
     password: {
+        alias: 'p',
         type: String,
         description: 'The password to use to encrypt or decrypt the database file.',
         group: 'database'
