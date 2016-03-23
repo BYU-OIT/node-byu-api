@@ -339,7 +339,7 @@ function connectionStatus(dbConn) {
                     format.wrap(item.name, { width: widths[0] - 3 }),
                     format.wrap(item.connector, { width: widths[1] - 3 }),
                     format.wrap(item.connected, { width: widths[2] - 3 }),
-                    format.wrap(settingsStr.join('\n'), { width: settingsWidth, hardBreak: '' })//JSON.stringify(settings, null, 2), { width: settingsWidth, hardBreak: '' })
+                    format.wrap(settingsStr.join('\n'), { width: settingsWidth, hardBreak: '' })
                 ]);
             });
             return table.toString();
