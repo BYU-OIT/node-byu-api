@@ -149,24 +149,3 @@ defineSchema = schemata({
         defaultValue: false
     }
 });
-
-/**
- * Require all JavaScript files in the directory specified.
- * @param dirPath
- * @returns {Promise}
- */
-function requireDirectory(dirPath) {
-    return file.readdirStats(dirPath)
-        .then(function(statMap) {
-            var promises = [];
-            Object.keys(statMap).forEach(function(filePath) {
-                var stat = statMap[filePath];
-                if (stat.isFile() && /\.js$/.test(filePath)) {
-                    require(filePath);
-                } else if (stat.isDirectory()) {
-                    promises.push(requireDirectory(filePath, depth - 1));
-                }
-            });
-            return Promise.all(promises);
-        });
-}
