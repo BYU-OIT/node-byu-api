@@ -118,7 +118,7 @@ function defaultExit() {
 /**
  * Require all JavaScript files in the directory specified.
  * @param dirPath
- * @returns {Promise<U>|Promise.<T>}
+ * @returns {Promise}
  */
 function requireDirectory(dirPath) {
     return file.readdirStats(dirPath)

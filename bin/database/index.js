@@ -30,8 +30,8 @@ Command.define('database-file',
         var log = require('../log/log');
 
         // limit stdout so that just this file can provide it
-        log({ detail: 'none', filter: path.resolve(__dirname, '../'), output: '', type: 'both'});
-        log({ detail: 'minimal', filter: __filename, output: '', type: 'both'});
+        log({ detail: 'none', filter: path.resolve(__dirname, '../') });
+        log({ detail: 'minimal', filter: __filename });
 
         // load the manager and start the interface
         return Manager.load(configuration)
@@ -81,7 +81,6 @@ function cfInterface(manager) {
     var dbConn = manager.dbConfig;
     var menu = {};
     var changes = false;
-
 
     menu.changePassword = function() {
         return cli

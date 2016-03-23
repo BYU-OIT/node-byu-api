@@ -65,29 +65,23 @@ log.schema = schemata({
         help: 'The filter must be a string.',
         validate: is.string
     },
-    output: {
+    stderr: {
         defaultValue: '',
-        description: 'The file path of where to output logs. The path must include the file name. Set to an empty ' +
-        'string to log to the console.',
+        description: 'The file path of where to output stderr data. The path must include the file name. Set to an ' +
+        'empty string to log to the console.',
         help: 'The filter must be a string.',
         validate: is.string
     },
-    terminal: {
-        defaultValue: false,
-        description: 'Set to true to make this the last log.'
-    },
-    type: {
-        defaultValue: 'both',
-        description: 'What type of messages to log.',
-        help: 'The type must be one of: "stderr", "stdout", "both".',
-        validate: (v) => ['stderr', 'stdout', 'both'].indexOf(v) !== -1
+    stdout: {
+        defaultValue: '',
+        description: 'The file path of where to output stdout data. The path must include the file name. Set to an ' +
+            'empty string to log to the console.',
+        help: 'The filter must be a string.',
+        validate: is.string
     }
 });
 
-log.STDOUT = defineGetter(log, 'STDOUT', () => 'stdout');
-log.STDERR = defineGetter(log, 'STDERR', () => 'stderr');
-log.BOTH = defineGetter(log, 'BOTH', () => 'both');
-
+log.NONE = defineGetter(log, 'NONE', () => 'none');
 log.MINIMAL = defineGetter(log, 'MINIMAL', () => 'minimal');
 log.DEVELOPER = defineGetter(log, 'DEVELOPER', () => 'developer');
 log.VERBOSE = defineGetter(log, 'VERBOSE', () => 'verbose');
@@ -103,12 +97,13 @@ log.VERBOSE = defineGetter(log, 'VERBOSE', () => 'verbose');
         var logged = false;
         var minimal;
         var obj = null;
+        var outputs = {};
         var s = source(2);
         var verbose;
 
         // check to see if the store needs to be sorted by depth
         if (sorted === false) {
-            store.sort(function(a, b) { return a.depth > b.depth ? 1 : -1 });
+            store.sort(function(a, b) { return a.depth > b.depth ? -1 : 1 });
             sorted = true;
         }
 
@@ -147,18 +142,18 @@ log.VERBOSE = defineGetter(log, 'VERBOSE', () => 'verbose');
 
                     // determine the message to log
                     switch (item.detail) {
-                        case 'none':
+                        case log.NONE:
                             none = true;
                             break;
-                        case 'minimal':
+                        case log.MINIMAL:
                             if (!minimal) minimal = data.chunk;
                             message = minimal;
                             break;
-                        case 'developer':
+                        case log.DEVELOPER:
                             if (!developer) developer = data.chunk + '  at ' + data.source + '\n\n';
                             message = developer;
                             break;
-                        case 'verbose':
+                        case log.VERBOSE:
                             if (!verbose) verbose = JSON.stringify(data) + '\n';
                             message = verbose;
                             break;

@@ -17,7 +17,7 @@ Connector.define({
 function connect(config) {
     var client;
     var manager;
-    var store;;
+    var store;
 
     client = {
         del: (key) => delete store[key],

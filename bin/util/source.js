@@ -61,6 +61,15 @@ module.exports = function(backDepth) {
         result.source = result.file + ':' + result.line;
     }
 
+    // add a toString method
+    Object.defineProperty(result, 'toString', {
+        enumerable: false,
+        configurable: true,
+        value: result.toString = function() {
+            return result.source;
+        }
+    });
+
     return result;
 };
 

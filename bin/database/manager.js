@@ -210,7 +210,8 @@ function connectionTransform(conn) {
     if (!conn.hasOwnProperty('client') || !conn.client || typeof conn.client !== 'object') throw Err.connector('Missing client object.');
     if (!conn.hasOwnProperty('manager') || !conn.manager || typeof conn.manager !== 'object') throw Err.connector('Missing manager object.');
     if (!conn.manager.hasOwnProperty('disconnect') || typeof conn.manager.disconnect !== 'function') throw Err.connector('Manager disconnect property must be a function.');
-    if (!conn.manager.hasOwnProperty('done') || typeof conn.manager.done !== 'function') throw Err.connector('Manager done property must be a function.');
+    if (!conn.manager.hasOwnProperty('preRequest') || typeof conn.manager.preRequest !== 'function') throw Err.connector('Manager preRequest property must be a function.');
+    if (!conn.manager.hasOwnProperty('postRequest') || typeof conn.manager.postRequest !== 'function') throw Err.connector('Manager postRequest property must be a function.');
     if (!conn.manager.hasOwnProperty('query') || typeof conn.manager.query !== 'function') throw Err.connector('Manager query property must be a function.');
 
     // wrap client functions in a promise
