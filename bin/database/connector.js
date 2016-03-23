@@ -5,6 +5,8 @@ var file            = require('../util/file');
 var is              = require('../util/is');
 var schemata        = require('object-schemata');
 var path            = require('path');
+var Promise         = require('bluebird');
+var vm              = require('vm');
 
 var ConnectorError = CustomError('ConnectorError');
 ConnectorError.exists = CustomError(ConnectorError, { code: 'EEXIST' });
@@ -70,11 +72,47 @@ exports.list = function() {
 /**
  * Require all scripts from the connectors directory.
  * @param {object} config
- * @returns {*}
+ * @returns {Promise}
  */
 exports.load = function(config) {
-    console.log(config);
-    if (!connectorsLoadPromise) connectorsLoadPromise = requireDirectory(path.resolve(__dirname, '../connectors'));
+
+    // define a private recursive load function
+    function load(fullFilePath) {
+        return file.stat(fullFilePath)
+            .then(function(stats) {
+                if (stats.isFile() && /\.js$/.test(fullFilePath)) {
+                    const configuration = require(fullFilePath);
+                    exports.define(configuration);
+                } else if (stats.isDirectory()) {
+                    return file.readdir(fullFilePath)
+                        .then(function(filePaths) {
+                            const promises = [];
+                            filePaths.forEach(function (filePath) {
+                                const fullFilePath = path.resolve(fullFilePath, filePath);
+                                promises.push(load(fullFilePath));
+                            });
+                            return Promise.all(promises);
+                        })
+                }
+            });
+    }
+
+    if (!connectorsLoadPromise) {
+        const promises = [];
+
+        // add the connectors directory to the list of connector paths
+        if (!config.connector) config.connector = [];
+        config.connector.unshift(path.resolve(__dirname, '../connectors'));
+
+        // start adding connectors
+        config.connector.forEach(function (filePath) {
+            const fullFilePath = path.resolve(process.cwd(), filePath);
+            promises.push(load(fullFilePath));
+        });
+
+        connectorsLoadPromise = Promise.all(promises);
+    }
+
     return connectorsLoadPromise;
 };
 
