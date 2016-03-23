@@ -4,7 +4,7 @@ A connector is a definition that tells the Node BYU API how to configure and man
 
 ## Starter Template
 
-The following starter template has examples and some pseudo-code. Details on how to modify this example to your needs can be found in the [Explanation section](#explanation).
+The following starter template has examples and some pseudo-code. Details on how to modify this starter template to your needs can be found in the [Explanation section](#explanation).
 
 ```js
 const db = require('some-db');
@@ -14,7 +14,7 @@ module.exports = {
     pool: true,
     connect: function(config) {
         return new Promise(function(resolve, reject) {
-            db.connect(function(err, conn) {
+            db.connect(config, function(err, conn) {
                 var client;
                 var manager;
 
