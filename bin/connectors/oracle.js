@@ -13,7 +13,7 @@ module.exports = {
 
                 if (err) return reject(err);
 
-                client = {
+                client = {                    
                     break: Promise.promisify(conn.break, {context: oracleDb}),
                     commit: Promise.promisify(conn.commit, {context: oracleDb}),
                     execute: Promise.promisify(conn.execute, {context: oracleDb}),

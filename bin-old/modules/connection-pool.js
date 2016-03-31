@@ -1,5 +1,5 @@
 "use strict";
-// This tool provides basic connection pool management that can be used by connectors.
+// This tool provides basic database pool management that can be used by connectors.
 
 var clc                 = require('../cli/clc');
 var customError         = require('./custom-error');
@@ -30,12 +30,12 @@ function pool(connect, disconnect, connConfiguration, poolConfiguration) {
 
     //manage pending requests and request timeout
     pending = timeoutQueue(poolConfig.connectTimeout * 1000, function(callback) {
-        callback(new PoolErr.timeout('Get database connection timed out.'), null);
+        callback(new PoolErr.timeout('Get database database timed out.'), null);
     });
 
     /**
-     * Get a database connection through a promise or a callback paradigm.
-     * @param {function} [callback] A callback to call (instead of returning a promise) when the connection is made.
+     * Get a database database through a promise or a callback paradigm.
+     * @param {function} [callback] A callback to call (instead of returning a promise) when the database is made.
      */
     factory.connect = promiseOption(factory, function(callback) {
         var conn;
@@ -46,9 +46,9 @@ function pool(connect, disconnect, connConfiguration, poolConfiguration) {
 
         //if terminated then throw an error
         if (terminate) {
-            callback(new PoolErr.terminated('The database connection pool has been terminated.'), null);
+            callback(new PoolErr.terminated('The database database pool has been terminated.'), null);
 
-            //if a connection is available then return it
+            //if a database is available then return it
         } else if (available.length > 0) {
             conn = available.get();
             unavailable.push(conn);
@@ -56,9 +56,9 @@ function pool(connect, disconnect, connConfiguration, poolConfiguration) {
 
             //if this request will overflow the pool then throw an error
         } else if (poolSize - growing + pending.length >= poolConfig.poolMax) {
-            callback(new PoolErr.limit('Database connection pool exhausted.'), null);
+            callback(new PoolErr.limit('Database database pool exhausted.'), null);
 
-            //if a connection is about to be available then add callback to pending
+            //if a database is about to be available then add callback to pending
         } else {
             pending.add(callback);
 
@@ -99,7 +99,7 @@ function pool(connect, disconnect, connConfiguration, poolConfiguration) {
     });
 
     /**
-     * Release a connection back into the connection pool.
+     * Release a database back into the database pool.
      * @param {object} conn
      */
     factory.disconnect = promiseOption(factory, function(conn, callback) {
@@ -141,7 +141,7 @@ function pool(connect, disconnect, connConfiguration, poolConfiguration) {
     });
 
     /**
-     * Terminate the connection pool so that it will no longer hand out connections.
+     * Terminate the database pool so that it will no longer hand out connections.
      * Also close connections as they are released. Use hard to close connections in use.
      * @param {boolean} [hard=false] Use true to immediately close connections in use.
      * @params {function} [callback] A callback function to return results to. If omitted then a
@@ -187,7 +187,7 @@ function pool(connect, disconnect, connConfiguration, poolConfiguration) {
 
     /**
      * Get the number of connections that are either immediately available or can be made
-     * available by growing the connection pool.
+     * available by growing the database pool.
      * @readonly
      * @type {number}
      */
@@ -222,7 +222,7 @@ pool.options = {
         type: Number,
         question_type: 'input',
         message: 'Connect timeout:',
-        description: 'The number of seconds to wait for a connection before resulting in a timeout error.',
+        description: 'The number of seconds to wait for a database before resulting in a timeout error.',
         defaultValue: 30,
         validate: function(v) { return v > 0; }
     },
@@ -239,7 +239,7 @@ pool.options = {
         type: Number,
         question_type: 'input',
         message: 'Maximum pool size:',
-        description: 'The maximum number of connections to which a connection pool can grow.',
+        description: 'The maximum number of connections to which a database pool can grow.',
         defaultValue: 4,
         transform: function(v) { return Math.round(v); }
     },
@@ -247,7 +247,7 @@ pool.options = {
         type: Number,
         question_type: 'input',
         message: 'Minimum pool size:',
-        description: 'The minimum number of connections a connection pool maintains.',
+        description: 'The minimum number of connections a database pool maintains.',
         defaultValue: 0,
         transform: function(v) { return Math.round(v); }
     },

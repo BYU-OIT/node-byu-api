@@ -1,5 +1,5 @@
 var clc             = require('./clc');
-var connFile        = require('../../bin/connection/configuration-file');
+var connFile        = require('../../bin/database/configuration-file');
 var log             = require('../modules/log');
 var resource        = require('../modules/resource');
 var server          = require('../modules/server');

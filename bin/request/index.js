@@ -3,7 +3,7 @@ const chalk             = require('chalk');
 const Command           = require('command-line-callback');
 const Database          = require('../database/index');
 const Handler           = require('./handler');
-const LogCli            = require('../log/index');
+const log               = require('../log/log');
 const Manager           = require('../database/manager');
 const Resource          = require('../resource/index');
 const ResourceLoader    = require('../resource/loader');
@@ -85,9 +85,6 @@ Command.define('request',
     function(configuration) {
         var promises = [];
 
-        // start logging
-        LogCli.cli(configuration);
-
         // join array of objects for cookies, headers, and query into a single object
         if (configuration.cookie) configuration.cookie = Object.assign.apply(Object, configuration.cookie);
         if (configuration.header) configuration.header = Object.assign.apply(Object, configuration.header);
@@ -113,11 +110,7 @@ Command.define('request',
         groups: {
             database: 'Database File Options',
             request: 'Request Options',
-            resource: 'Resource Options',
-            log: {
-                title: 'Log Options',
-                description: LogCli.helpSection()
-            }
+            resource: 'Resource Options'
         },
         options: options()
     });
@@ -129,7 +122,8 @@ function isKvArgument(value) {
 }
 
 function options() {
-    var result = Object.assign({}, exports.options, Database.options, Resource.options, LogCli.options);
+    var result = Object.assign({}, exports.options, Database.options, Resource.options);
+    result.dbFile = Object.assign({}, result.dbFile);
     result.dbFile.hidden = false;
     result.dbFile.required = false;
     return result;

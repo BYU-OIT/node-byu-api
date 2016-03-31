@@ -1,14 +1,14 @@
 "use strict";
 // The purpose of this file is to load connectors and store connectors.
-var CustomError     = require('custom-error-instance');
-var file            = require('../util/file');
-var is              = require('../util/is');
-var schemata        = require('object-schemata');
-var path            = require('path');
-var Promise         = require('bluebird');
-var vm              = require('vm');
+const CustomError   = require('custom-error-instance');
+const file          = require('../util/file');
+const is            = require('../util/is');
+const log           = require('../log/log');
+const schemata      = require('object-schemata');
+const path          = require('path');
+const Promise       = require('bluebird');
 
-var ConnectorError = CustomError('ConnectorError');
+const ConnectorError = CustomError('ConnectorError');
 ConnectorError.exists = CustomError(ConnectorError, { code: 'EEXIST' });
 ConnectorError.create = CustomError(ConnectorError, { code: 'ECREATE' });
 ConnectorError.undefined = CustomError(ConnectorError, { code: 'EUDEF' });
@@ -19,7 +19,7 @@ ConnectorError.noimp = CustomError(ConnectorError, { code: 'ENIMP' });
 
 var connectorsLoadPromise;
 var defineSchema;
-var store = {};
+const store = {};
 
 
 Object.defineProperty(exports, 'error', {
@@ -39,6 +39,7 @@ exports.define = function(configuration) {
     if (exports.exists(config.name)) throw new ConnectorError.exists('A Connector with this name already exists: ' + config.name);
     config.schema = schemata(config.options);
     store[config.name] = config;
+    log.info('define', config.name);
     return store[config.name];
 };
 
@@ -93,7 +94,9 @@ exports.load = function(config) {
                             return Promise.all(promises);
                         })
                 }
-            }, err => console.error(err.stack));
+            }, function(err) {
+                log.error.at('load', err.message);
+            });
     }
 
     if (!connectorsLoadPromise) {
@@ -121,13 +124,14 @@ exports.load = function(config) {
  */
 exports.remove = function(name) {
     if (!store.hasOwnProperty(name)) throw new ConnectorError.undefined('Connector not defined: ' + name);
+    log.info('remove', name);
     delete store[name];
 };
 
 
 defineSchema = schemata({
     connect: {
-        description: 'The function to call to get a database connection.',
+        description: 'The function to call to get a database database.',
         required: true,
         validate: is.function,
         help: 'The connect must be a function.'
@@ -145,7 +149,7 @@ defineSchema = schemata({
         help: 'The options must be an object.'
     },
     pool: {
-        description: 'Whether to use the connection pool or not.',
+        description: 'Whether to use the database pool or not.',
         defaultValue: false
     }
 });

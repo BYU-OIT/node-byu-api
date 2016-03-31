@@ -1,7 +1,7 @@
 var chalk           = require('chalk');
 var clc             = require('./clc');
 var cliError        = require('./cli-error');
-var connector       = require('../../bin/connection/connector');
+var connector       = require('../../bin/database/connector');
 var format          = require('cli-format');
 var pool            = require('../modules/connection-pool');
 

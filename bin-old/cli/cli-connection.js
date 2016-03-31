@@ -4,7 +4,7 @@ var cliConnection   = require('./cli-connection-interactive');
 var cliError        = require('./cli-error');
 var connector       = require('connector.js');
 var format          = require('cli-format');
-var connFile        = require('connection-file');
+var connFile        = require('database-file');
 var pool            = require('../modules/connection-pool');
 var requireDir      = require('../../bin/util/require-directory');
 var Table           = require('cli-table2');
@@ -13,13 +13,13 @@ var options = {
     connector: {
         alias: 'c',
         type: String,
-        description: 'The name of the connector to use the database connection configuration with.',
+        description: 'The name of the connector to use the database database configuration with.',
         required: true
     },
     'connector-settings': {
         alias: 'd',
         type: Object,
-        description: 'The settings needed by the connector to establish a database connection.',
+        description: 'The settings needed by the connector to establish a database database.',
         help: 'You probably shouldn\'t use this from the command line because any sensitive information will be ' +
         'stored in your command line history. Instead, use the interactive session.',
         required: true
@@ -27,7 +27,7 @@ var options = {
     name: {
         alias: 'n',
         type: String,
-        description: 'The name associated with the database connection configuration.',
+        description: 'The name associated with the database database configuration.',
         required: true
     },
     'old-password': {
@@ -99,7 +99,7 @@ exports.connectionStatus = function(dbConn) {
                 return;
             }
 
-            //test each connection
+            //test each database
             list.forEach(function(item, index) {
                 var promise = exports.connectionTest(item.connector, item.config)
                     .then(function() {
@@ -130,7 +130,7 @@ exports.connectionStatus = function(dbConn) {
  * Test a configuration for a connector.
  * @param {string} connectorName
  * @param {object} configuration
- * @returns {Promise} that resolves if the connection and disconnection is successful, otherwise it rejects the promise.
+ * @returns {Promise} that resolves if the database and disconnection is successful, otherwise it rejects the promise.
  */
 exports.connectionTest = function(connectorName, configuration) {
     var item = connector.get(connectorName);
@@ -187,7 +187,7 @@ exports.questions = function(connectorName, configuration) {
         addQuestion(item.configuration, key);
     });
 
-    //get connection manager configuration options
+    //get database manager configuration options
     Object.keys(pool.options).forEach(function(key) {
         addQuestion(pool.options, key);
     });
@@ -211,25 +211,25 @@ clc.define('connection', interactiveTerminal, {
 });
 
 clc.define('connection-define', define, {
-    description: 'Define a connection configuration.',
+    description: 'Define a database configuration.',
     defaultOption: 'store',
     options: optSelect('connector', 'connector-settings', 'name', 'password', 'store')
 });
 
 clc.define('connection-delete', remove, {
-    description: 'Delete a connection configuration.',
+    description: 'Delete a database configuration.',
     defaultOption: 'store',
     options: optSelect('name', 'password', 'store')
 });
 
 clc.define('connection-list', list, {
-    description: 'List saved connection configurations.',
+    description: 'List saved database configurations.',
     defaultOption: 'store',
     options: optSelect('password', 'store')
 });
 
 clc.define('connection-password', password, {
-    description: 'Change the password for a connection configuration file.',
+    description: 'Change the password for a database configuration file.',
     defaultOption: 'store',
     options: optSelect('old-password', 'password', 'store')
 });

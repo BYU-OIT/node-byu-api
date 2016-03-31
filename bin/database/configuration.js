@@ -1,16 +1,17 @@
 "use strict";
-// This file has tools for managing the database connection configuration files.
-var Connector       = require('./connector');
-var CustomError     = require('custom-error-instance');
-var crypto          = require('crypto');
-var file            = require('./../util/file');
-var path            = require('path');
-var Pool            = require('./pool');
-var schemata        = require('object-schemata');
+// This file has tools for managing the database database configuration files.
+const Connector     = require('./connector');
+const CustomError   = require('custom-error-instance');
+const crypto        = require('crypto');
+const file          = require('./../util/file');
+const log           = require('../log/log');
+const path          = require('path');
+const Pool          = require('./pool');
+const schemata      = require('object-schemata');
 
 const algorithm = 'aes-256-ctr';
 const Err = CustomError('DbConfigError');
-Err.path = CustomError(Err, { code: 'EPATH', message: 'Required connection file path not specified.' });
+Err.path = CustomError(Err, { code: 'EPATH', message: 'Required database file path not specified.' });
 Err.pass = CustomError(Err, { code: 'EPASS' });
 Err.noPass = CustomError(Err.pass, { message: 'File is encrypted and needs a password.' });
 Err.wrongPass = CustomError(Err.pass, { message: 'Connection store password is incorrect.' });
@@ -20,8 +21,8 @@ Err.set = CustomError(Err, { code: 'ESET' });
 module.exports = Configuration;
 
 /**
- * Create a connection factory.
- * @params {object} A connection file configuration.
+ * Create a database factory.
+ * @params {object} A database file configuration.
  * @returns {{ changePassword: function, get: function, list: function, load: function, remove: function, save: function, set: function }}
  */
 function Configuration(configuration) {
@@ -46,7 +47,7 @@ function Configuration(configuration) {
     };
 
     /**
-     * Get the entire configuration object or a single connection configuration.
+     * Get the entire configuration object or a single database configuration.
      * @param {string} [name] The name of the configuration to get.
      * @returns {object, undefined}
      */
@@ -74,7 +75,8 @@ function Configuration(configuration) {
                 throw e;
             })
             .then(function(content) {
-                var configuration = content ? decrypt(content, password) : {};
+                const configuration = content ? decrypt(content, password) : {};
+                log.info(content ? 'load' : 'create', filePath);
                 store = {};
                 Object.keys(configuration).forEach(function(name) {
                     var config = configuration[name];
@@ -120,8 +122,8 @@ function Configuration(configuration) {
 
         if (!name || typeof name !== 'string') throw Err.set('Configuration name must be a string.');
         if (!connectorName || typeof connectorName !== 'string') throw Err.set('Configuration connectorName must be a string.');
-        if (!config || typeof config !== 'object') throw Err.set('Property "config" must be an object for connection: ' + name);
-        if (poolConfig && typeof poolConfig !== 'object') throw Err.set('Property "poolConfig" must be an object for connection: ' + name);
+        if (!config || typeof config !== 'object') throw Err.set('Property "config" must be an object for database: ' + name);
+        if (poolConfig && typeof poolConfig !== 'object') throw Err.set('Property "poolConfig" must be an object for database: ' + name);
 
         connector = Connector.get(connectorName);
         config = connector.schema.normalize(config);
@@ -171,7 +173,7 @@ Configuration.validateFormat = function(config) {
 
             if (!name || typeof name !== 'string') throw Err.set('Configuration name must be a string for: ' + name);
             if (!connectorName || typeof connectorName !== 'string') throw Err.set('Configuration connectorName must be a string for: ' + name);
-            if (!connectorConfig || typeof connectorConfig !== 'object') throw Err.set('Property "config" must be an object for connection: ' + name);
+            if (!connectorConfig || typeof connectorConfig !== 'object') throw Err.set('Property "config" must be an object for database: ' + name);
 
             connector = Connector.get(connectorName);
             connector.schema.normalize(connectorConfig);

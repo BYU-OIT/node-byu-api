@@ -23,6 +23,7 @@ exports.options = {
         type: String,
         description: 'The path to the database file.',
         required: true,
+        hidden: true,
         group: 'database'
     },
     password: {
@@ -33,13 +34,8 @@ exports.options = {
     }
 };
 
-Command.define('database-file',
+Command.define('db-config',
     function(configuration) {
-        var log = require('../log/log');
-
-        // limit stdout so that just this file can provide it
-        log({ detail: 'none', filter: path.resolve(__dirname, '../') });
-        log({ detail: 'minimal', filter: __filename });
 
         // load the manager and start the interface
         return Manager.load(configuration)
@@ -49,11 +45,11 @@ Command.define('database-file',
             })
             .then(cfInterface)
             .catch(function(e) {
-                if (e instanceof Configuration.error.pass) console.error(e.message);
+                console.error(e.stack);
             });
     },
     {
-        brief: 'Create or update a connection file.',
+        brief: 'Create or update a database file.',
         defaultOption: 'dbFile',
         synopsis: [
             '[OPTIONS]... [FILE]'
@@ -82,7 +78,7 @@ function authInterface(config) {
 
 /**
  * Set the terminal into interactive mode.
- * @param manager The connection manager.
+ * @param manager The database manager.
  * @returns {Promise}
  */
 function cfInterface(manager) {
@@ -128,7 +124,7 @@ function cfInterface(manager) {
             }])
             .then(function(answers) {
                 var item = dbConn.get(answers.name);
-                if (item) throw Error('A connection configuration with that name already exists.');
+                if (item) throw Error('A database configuration with that name already exists.');
                 return menu.edit(answers.name);
             });
     };
@@ -208,10 +204,11 @@ function cfInterface(manager) {
     };
 
     menu.root = function() {
+        var count = dbConn.list().length;
         var choicesArray = [
             'Create',
             'Update',
-            'List',
+            'List (' + count + ')',
             'Delete',
             new inquirer.Separator(),
             'Change Password',
@@ -223,7 +220,7 @@ function cfInterface(manager) {
                 switch (choice.toLowerCase()) {
                     case 'create': return menu.create().then(menu.root);
                     case 'update': return menu.update().then(menu.root);
-                    case 'list': return menu.list().then(menu.root);
+                    case 'list (' + count + ')': return menu.list().then(menu.root);
                     case 'delete': return menu.remove().then(menu.root);
                     case 'change password': return menu.changePassword().then(menu.root);
                     case 'save': return menu.save().then(menu.root);
@@ -309,7 +306,7 @@ function connectionStatus(dbConn) {
         return Promise.resolve(format.wrap(chalk.italic('There are no defined connections.')) + '\n');
     }
 
-    //test each connection
+    //test each database
     list.forEach(function(item, index) {
         var promise = Manager.test(item.connector, item.config)
             .then(function(result) {

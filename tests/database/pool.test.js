@@ -231,9 +231,9 @@ function connectPromise(delay) {
 
 
 /*
-var connector       = require('../../bin/connection/connector');
+var connector       = require('../../bin/database/connector');
 var expect          = require('chai').expect;
-var Pool            = require('../../bin/connection/pool');
+var Pool            = require('../../bin/database/pool');
 var Promise         = require('bluebird');
 
 describe('database/pool', function() {

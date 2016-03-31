@@ -1,12 +1,12 @@
 var cli             = require('./../../bin/util/cli');
 var cliConnection   = require('./cli-connection');
-var connector       = require('../../bin/connection/connector');
+var connector       = require('../../bin/database/connector');
 var inquirer        = require('inquirer');
 var requireDir      = require('../../bin/util/require-directory');
 
 /**
  * Set the terminal into interactive mode.
- * @param dbConn The connection file factory.
+ * @param dbConn The database file factory.
  * @returns {Promise}
  */
 module.exports = function(dbConn) {
@@ -51,7 +51,7 @@ module.exports = function(dbConn) {
             }])
             .then(function(answers) {
                 var item = dbConn.get(answers.name);
-                if (item) throw new Error('A connection configuration with that name already exists.');
+                if (item) throw new Error('A database configuration with that name already exists.');
                 return menu.edit(answers.name);
             });
     };

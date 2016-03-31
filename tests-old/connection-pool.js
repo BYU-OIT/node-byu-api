@@ -1,5 +1,5 @@
 "use strict";
-var manager             = require('./modules/connection-pool');
+var manager             = require('./modules/database-pool');
 var Promise             = require('bluebird');
 var test                = require('tape');
 
@@ -81,7 +81,7 @@ test('Manager accessor functions return promises', function(t) {
 
 
 
-test('Manager connection availability and pooling', function(t) {
+test('Manager database availability and pooling', function(t) {
     var m = manager(connect, disconnect, { fail: false }, {
         'pool-min': 2,
         'pool-max': 8,
@@ -126,7 +126,7 @@ test('Manager connection availability and pooling', function(t) {
         });
 });
 
-test('Manager connection timeout', function(t) {
+test('Manager database timeout', function(t) {
     var m = manager(connect, disconnect, { timeout: 100, fail: false }, {
         'connect-timeout': .05
     });
@@ -146,7 +146,7 @@ test('Manager connection timeout', function(t) {
         });
 });
 
-test('Manager connection fail', function(t) {
+test('Manager database fail', function(t) {
     var m = manager(connect, disconnect, { fail: true }, {
         'pool-min': 2,
         'pool-max': 8,
@@ -167,7 +167,7 @@ test('Manager connection fail', function(t) {
         });
 });
 
-test('Manager idle connection disconnect', function(t) {
+test('Manager idle database disconnect', function(t) {
     var m = manager(connect, disconnect, { }, {
         'pool-increment': 1,
         'pool-timeout': .05
@@ -177,11 +177,11 @@ test('Manager idle connection disconnect', function(t) {
 
     m.connect()
         .then(function(conn) {
-            t.pass(m.immediate, 0, 'connection made');
+            t.pass(m.immediate, 0, 'database made');
             return m.disconnect(conn);
         })
         .then(function() {
-            t.equal(m.immediate, 1, 'connection released');
+            t.equal(m.immediate, 1, 'database released');
             return Promise.delay(100);
         })
         .then(function() {

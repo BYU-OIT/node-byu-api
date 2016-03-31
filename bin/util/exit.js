@@ -1,5 +1,6 @@
 "use strict";
 var defineGetter    = require('./define-getter');
+var log             = require('../log/log');
 var Promise         = require('bluebird-settle');
 
 var exiting = false;
@@ -38,7 +39,7 @@ process.exit = (function(exit) {
     if (exiting) return;
     exiting = true;
     return function(code) {
-        //console.log('Process exit invoked');
+        log.info('exit', '');
         var promises = [];
         store.forEach(function(callback) {
             var result = callback();
@@ -53,11 +54,10 @@ process.exit = (function(exit) {
 })(process.exit);
 
 process.on('SIGINT', function() {
-    //console.log('SIGINT signal received');
+    log.info('SIGINT', '');
     process.exit(0);
 });
 
 process.on('exit', function() {
-    //console.log('Process exit inevitable');
     process.exit(0);
 });

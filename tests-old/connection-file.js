@@ -1,5 +1,5 @@
 "use strict";
-var connFile        = require('./modules/connection-file');
+var connFile        = require('./modules/database-file');
 var fs              = require('fs');
 var test            = require('tape');
 

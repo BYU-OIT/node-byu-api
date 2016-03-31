@@ -17,4 +17,4 @@ module.exports = function() {
         reject: reject,
         promise: promise
     };
-}
+};

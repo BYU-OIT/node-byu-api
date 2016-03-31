@@ -9,8 +9,8 @@ var schemata            = require('object-schemata');
 var timeoutQueue        = require('../util/timeout-queue');
 
 var Err = CustomError('ConnectionPoolError');
-Err.terminated = CustomError(Err, { code: 'ETERM', message: 'The database connection pool has been terminated.' });
-Err.timeout = CustomError(Err, { code: 'ETIME', message: 'Get database connection timed out.' });
+Err.terminated = CustomError(Err, { code: 'ETERM', message: 'The database database pool has been terminated.' });
+Err.timeout = CustomError(Err, { code: 'ETIME', message: 'Get database database timed out.' });
 Err.revoked = CustomError(Err, { code: 'ERVOK', message: 'Connection unavailable' });
 
 module.exports = Pool;
@@ -19,7 +19,7 @@ module.exports = Pool;
  * Set up a connect function to use pooling.
  * @param {function} connect The original connect function.
  * @param {object} configuration The pool configuration.
- * @param {object} [connConfig] The connection configuration to use for all connections.
+ * @param {object} [connConfig] The database configuration to use for all connections.
  * @returns {{ available: number, immediate: number, poolSize: number, terminate: function }, function, poolConnect}
  * @constructor
  */
@@ -34,7 +34,7 @@ function Pool(connect, configuration, connConfig) {
 
     //manage available connections and idle timeout
     available = timeoutQueue(poolConfig.poolTimeout * 1000, function(conn) {
-        // if the pool can shrink then shrink it, otherwise add the connection back to available list
+        // if the pool can shrink then shrink it, otherwise add the database back to available list
         if (available.length + unavailable.length >= poolConfig.poolMin) {
             conn.manager.disconnect();
         } else {
@@ -49,7 +49,7 @@ function Pool(connect, configuration, connConfig) {
 
     /**
      * Get the number of connections that are either immediately available or can be made
-     * available by growing the connection pool.
+     * available by growing the database pool.
      * @readonly
      * @type {number}
      */
@@ -70,7 +70,7 @@ function Pool(connect, configuration, connConfig) {
     getter('poolSize', () => available.length + growing + unavailable.length);
 
     /**
-     * Terminate the connection pool.
+     * Terminate the database pool.
      * @param {boolean} [hard=false] Set to true to terminate in use connections immediately.
      * @returns {Promise}
      */
@@ -171,10 +171,10 @@ function Pool(connect, configuration, connConfig) {
     function lease(conn) {
         var disconnect;
 
-        // if a connection wasn't supplied then get the next available connection
+        // if a database wasn't supplied then get the next available database
         if (!conn) conn = available.get();
 
-        // add connection to unavailable
+        // add database to unavailable
         unavailable.push(conn);
 
         // store the old disconnect and overwrite it
@@ -197,7 +197,7 @@ function Pool(connect, configuration, connConfig) {
     }
 
     /**
-     * Get a connection from the pool.
+     * Get a database from the pool.
      * @returns {Promise}
      */
     function poolConnect() {
@@ -211,10 +211,10 @@ function Pool(connect, configuration, connConfig) {
         // if terminated then reject the promise
         if (terminate) return Promise.reject(new Err.terminated());
 
-        // if an idle connection is available then return it
+        // if an idle database is available then return it
         if (available.length > 0) return Promise.resolve(lease());
 
-        // if a connection is about to be available then add callback to pending
+        // if a database is about to be available then add callback to pending
         deferred = defer();
         pending.add(deferred);
 
@@ -243,7 +243,7 @@ function Pool(connect, configuration, connConfig) {
 }
 
 Pool.schema = schemata({
-    connectTimeout: {                               // The number of seconds a connection request should wait before being rejected
+    connectTimeout: {                               // The number of seconds a database request should wait before being rejected
         type: 'input',
         message: 'Connect timeout:',
         help: 'This value must be a non-negative number.',
@@ -281,7 +281,7 @@ Pool.schema = schemata({
     },
     poolTimeout: {
         type: 'input',
-        message: 'Pool timeout (in seconds):',      // The number of seconds before an idle connection will be closed
+        message: 'Pool timeout (in seconds):',      // The number of seconds before an idle database will be closed
         defaultValue: 60,
         transform: parseInt,
         validate: is.nonNegativeNumber

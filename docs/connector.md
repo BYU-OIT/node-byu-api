@@ -5,7 +5,7 @@ A connector is a definition that tells the Node BYU API how to configure and man
 ## Starter Template
 
 The following starter template has examples and some pseudo-code. Details on how to modify this starter template to your needs can be found in the [Explanation section](#explanation).
-
+ a
 ```js
 const db = require('some-db');
 
@@ -70,17 +70,17 @@ If the connecting to the database is an asynchronous operation then you should r
 
 The value returned from the connect function (or the value that is resolved to by the promise) must contain two properties: *client* and *manager*.
 
-* **client** - The value from this property will be injected into the database object for the [Request Handler](./request-handler.md). You should not provide a way through the client value for the [Request Handler](./request-handler.md) to make new connections or disconnect from existing connections since this will be handled automatically through the database manager.
+* **client** - The value from this property will be injected into the database object for the [Resource Request Handler](./resource.md). You should not provide a way through the client value for the [Resource Request Handler](./resource.md) to make new connections or disconnect from existing connections since this will be handled automatically through the database manager.
 
 * **manager** - The value for this property must be an object that defines each of these required properties: *disconnect*, *preRequest*, *postRequest*, and *query*.
 
   **manager.disconnect ( connection )** - This function receives a connection object that should be disconnected from the database. If the disconnect happens asynchronously then this function should return a promise that resolves once the connection has been disconnected.
 
-  **manager.preRequest ( connection )** - This function receives a connection object. Before a [Request Handler](./request-handler.md) is given the *client* value this function will be executed. If the function needs to process asynchronously then it must return a promise.
+  **manager.preRequest ( connection )** - This function receives a connection object. Before a [Resource Request Handler](./resource.md) is given the *client* value this function will be executed. If the function needs to process asynchronously then it must return a promise.
 
-   **manager.postRequest ( connection, success )** - This function receives a connection object and a boolean indicating the success of the [Request Handler](./request-handler.md). After a [Request Handler](./request-handler.md) completes, before this connection becomes available for other [Request Handlers](./request-handler.md) to use, this function will be executed. If the function needs to process asynchronously then it must return a promise.
+   **manager.postRequest ( connection, success )** - This function receives a connection object and a boolean indicating the success of the [Resource Request Handler](./resource.md). After a [Resource Request Handler](./resource.md) completes, before this connection becomes available for other [Resource Request Handlers](./resource.md) to use, this function will be executed. If the function needs to process asynchronously then it must return a promise.
 
-   **manager.query ( connection, args )** - This function receives a connection object and the arguments used to invoke the query interface. A query interface is accessible within a [Request Handler](./request-handler.md) for any connector definition and serves the purpose of allowing the [Request Handler](./request-handler.md) to make multiple simultaneous database queries (using multiple connections). This can provide significant performance boosts, but note that the connections used can be either idle database connections or the dedicated connection provided to this specific [Request Handler](./request-handler.md).
+   **manager.query ( connection, args )** - This function receives a connection object and the arguments used to invoke the query interface. A query interface is accessible within a [Resource Request Handler](./resource.md) for any connector definition and serves the purpose of allowing the [Resource Request Handler](./resource.md) to make multiple simultaneous database queries (using multiple connections). This can provide significant performance boosts, but note that the connections used can be either idle database connections or the dedicated connection provided to this specific [Resource Request Handler](./resource.md).
 
 ### name
 

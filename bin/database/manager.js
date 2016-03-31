@@ -32,7 +32,7 @@ function Manager(configuration) {
     }
 
     // loosely validate configuration parameter
-    if (!configuration || typeof configuration !== 'object') throw Err.input('Cannot create manager with invalid configuration. Expected a connection configuration object map.');
+    if (!configuration || typeof configuration !== 'object') throw Err.input('Cannot create manager with invalid configuration. Expected a database configuration object map.');
 
     /**
      * Make a request for persistent connections. Once they are all available the promise will
@@ -52,7 +52,7 @@ function Manager(configuration) {
                 return p;
             }, []);
 
-        // build the connection map
+        // build the database map
         return Promise
             .map(names, (name) => connect(name))
             .then(function(connections) {
@@ -61,7 +61,7 @@ function Manager(configuration) {
                 names.forEach(function(name, index) {
                     var conn = connections[index];
 
-                    // set up a race between the persistent connection and a new connection to see who
+                    // set up a race between the persistent database and a new database to see who
                     // is ready to fulfill the query first
                     var query = function() {
                         var activePromise = conn.manager.activePromise();
@@ -114,8 +114,8 @@ function Manager(configuration) {
     factory.dbConfig = defineGetter(factory, 'dbConfig', () => dbConfig);
 
     /**
-     * Get a connection, make a query, disconnect, and return the query response.
-     * @param {string} name The connection name to use.
+     * Get a database, make a query, disconnect, and return the query response.
+     * @param {string} name The database name to use.
      * @param {*[]} args An array like object with arguments to pass to the query.
      */
     factory.query = function(name, args) {
@@ -138,7 +138,7 @@ function Manager(configuration) {
         return store[name].then((fn) => fn());
     }
 
-    // build the map of connector functions to connection names
+    // build the map of connector functions to database names
     Object.keys(configuration).forEach(function(key) {
         var config = configuration[key];
         store[key] = Manager.connect(config.connector, config.config, config.pool);
@@ -148,7 +148,7 @@ function Manager(configuration) {
 }
 
 /**
- * Get a function that will get a connection when called.
+ * Get a function that will get a database when called.
  * @param {string} connector The name of the connector to use.
  * @param {object} config The connector configuration to use to connect to the database.
  * @param {object} [poolConfig] The pool configuration to use.
@@ -176,13 +176,13 @@ Manager.load = function(config) {
     if (!config.dbFile) return Promise.resolve(Manager({}));
     return Connector.load(config)
         .then(Configuration(config).load)
-        .then((dbConfig) => Manager(dbConfig));
+        .then(dbConfig => Manager(dbConfig));
 };
 
 /**
- * Test a connection configuration against against a connector.
+ * Test a database configuration against against a connector.
  * @param {string} connector The connector's name.
- * @param {object} config The connection configuration to test.
+ * @param {object} config The database configuration to test.
  * @returns {Promise} that resolves to true or an Error object.
  */
 Manager.test = function(connector, config) {
@@ -194,7 +194,7 @@ Manager.test = function(connector, config) {
 };
 
 /**
- * Take the connection object (from a connected database connection) and transform it for use within the framework
+ * Take the database object (from a connected database database) and transform it for use within the framework
  * @param conn
  * @returns {*}
  */
@@ -204,9 +204,7 @@ function connectionTransform(conn) {
     var lastPromise;
     var query;
 
-    console.log('hello\nhello\nhello\nhello\nhello\nhello\n');
-
-    // validate that the connection is formatted appropriately
+    // validate that the database is formatted appropriately
     if (!conn.hasOwnProperty('client') || !conn.client || typeof conn.client !== 'object') throw Err.connector('Missing client object.');
     if (!conn.hasOwnProperty('manager') || !conn.manager || typeof conn.manager !== 'object') throw Err.connector('Missing manager object.');
     if (!conn.manager.hasOwnProperty('disconnect') || typeof conn.manager.disconnect !== 'function') throw Err.connector('Manager disconnect property must be a function.');

@@ -1,6 +1,6 @@
 "use strict";
 var clc                 = require('../cli/clc');
-var connFile            = require('./../../bin/connection/configuration-file');
+var connFile            = require('./../../bin/database/configuration-file');
 var connRequestManager  = require('./connection-request');
 var log                 = require('./log');
 var Promise             = require('bluebird');

@@ -4,8 +4,6 @@ const definition        = require('./definition');
 const file              = require('../util/file');
 const fs                = require('fs');
 const is                = require('../util/is');
-const log               = require('../log/log');
-const LogCli            = require('../log/index');
 const path              = require('path');
 const schemata          = require('object-schemata');
 
@@ -22,9 +20,6 @@ module.exports = Resource;
 function Resource(configuration) {
     var config = Resource.schema.normalize(configuration);
     var src = config.src;
-
-    // set up logging
-    LogCli.processOption(config.logResource.detail, config.logResource.location, log.BOTH, src);
 
     // validate that the src directory is a directory
     return file.stat(src)
@@ -128,9 +123,6 @@ Resource.schema = schemata({
         defaultValue: './',
         transform: (value) => path.resolve(process.cwd(), value),
         validate: is.string
-    },
-    logResource: {
-        help: 'The log resource must be an object that specifies the '
     },
     srcIndex: {
         help: 'The src must be a string.',
