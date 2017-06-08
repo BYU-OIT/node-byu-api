@@ -14,8 +14,8 @@ ddd:
   ubiquitous_language_url: 
   context_map_url: 
 links:
-  system_documentation_url: https://github.com/byu-oit-appdev/node-byu-api
-  source_repo_url: https://github.com/byu-oit-appdev/node-byu-api
+  system_documentation_url: https://github.com/byu-oit/node-byu-api
+  source_repo_url: https://github.com/byu-oit/node-byu-api
   swagger_urls:
 microservice: False
 technologies_used:
@@ -48,5 +48,5 @@ tags:
   env: prd
   app: node-byu-api
   team: gro:AD-Global Education Initiative
-federation_json_url: https://raw.githubusercontent.com/byu-oit-appdev/node-byu-api/master/.repo-meta.yml
+federation_json_url: https://raw.githubusercontent.com/byu-oit/node-byu-api/master/.repo-meta.yml
 
